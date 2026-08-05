@@ -3,6 +3,7 @@
   "bundles": {
     "eeg_color_encoder": {
       "best_epoch": 22,
+      "archive": {"name": "eeg_color_encoder.zip", "bytes": 226353559, "sha256": "e65723ac220408ff6b2299318d9f77491aaf862fb3a812fae24d52c7349447b4"},
       "files": {
         "best.pt": {"bytes": 64077526, "sha256": "412ac9f711af9743b618463fcb5f9c817527d9f79916a4677734ed15206cf0ca"},
         "components/adapter.pt": {"bytes": 64837855, "sha256": "3c3ed237b4a15ce8cf39e4d183505bb09bba2338fa32d2d0fc9c05fcb2d4a477"},
@@ -13,6 +14,7 @@
     },
     "eeg_edge_encoder": {
       "best_epoch": 15,
+      "archive": {"name": "eeg_edge_encoder.zip", "bytes": 148548008, "sha256": "372d89e1691022894ae12523e72b57fca166bfefbfe740f1ab5fde59528afae4"},
       "files": {
         "best.pt": {"bytes": 65057835, "sha256": "f901a2fba23ced00e217249992a0bf1a44044e59aa74d2fc79089059757bcab9"},
         "components/baseline.pt": {"bytes": 57425011, "sha256": "0b000040e6f74be03ba84c999f40ca9cff366538c7aba6a4d79cc5e7d3e8268e"},
