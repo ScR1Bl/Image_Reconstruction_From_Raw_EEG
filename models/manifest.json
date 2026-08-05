@@ -1,0 +1,24 @@
+{
+  "format_version": 1,
+  "bundles": {
+    "eeg_color_encoder": {
+      "best_epoch": 22,
+      "files": {
+        "best.pt": {"bytes": 64077526, "sha256": "412ac9f711af9743b618463fcb5f9c817527d9f79916a4677734ed15206cf0ca"},
+        "components/adapter.pt": {"bytes": 64837855, "sha256": "3c3ed237b4a15ce8cf39e4d183505bb09bba2338fa32d2d0fc9c05fcb2d4a477"},
+        "components/color_decoder.pt": {"bytes": 4665539, "sha256": "446d0768c8d4b5e0427f4180e6d8af22ec9d5dad9563f7ef5157c83cfaf039a3"},
+        "components/color_oracle.pt": {"bytes": 86930279, "sha256": "46cf38732ea3a9c4c5e811322e48fa7e853533bb2687a8ff348da18f78e461a5"},
+        "components/semantic_encoder.pt": {"bytes": 24915031, "sha256": "2675fc21fd8ed2cc1a05e43fe31f1ddcdd0ffd26400787dcbeb6c76add41e865"}
+      }
+    },
+    "eeg_edge_encoder": {
+      "best_epoch": 15,
+      "files": {
+        "best.pt": {"bytes": 65057835, "sha256": "f901a2fba23ced00e217249992a0bf1a44044e59aa74d2fc79089059757bcab9"},
+        "components/baseline.pt": {"bytes": 57425011, "sha256": "0b000040e6f74be03ba84c999f40ca9cff366538c7aba6a4d79cc5e7d3e8268e"},
+        "components/edge_decoder.pt": {"bytes": 12559485, "sha256": "50745082d99357d7847e82072681a5772ea8d97b229dff9f5918a38fdf96e67d"},
+        "components/semantic_encoder.pt": {"bytes": 24915031, "sha256": "2675fc21fd8ed2cc1a05e43fe31f1ddcdd0ffd26400787dcbeb6c76add41e865"}
+      }
+    }
+  }
+}

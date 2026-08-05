@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eeg-mae"
+version = "0.1.0"
+description = "Subject-adaptive semantic and spatial-edge EEG encoders for THINGS-EEG2"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.26", "Pillow>=10", "torch>=2.2"]
+
+[project.optional-dependencies]
+visual-teachers = [
+  "Pillow>=10",
+  "transformers>=5.0",
+  "torchvision>=0.20",
+  "einops>=0.8",
+  "kornia>=0.8",
+  "timm>=1.0",
+  "scipy>=1.12",
+  "opencv-python>=4.9",
+]
+dev = ["pytest>=8", "ruff>=0.12"]
+
+[project.scripts]
+eeg-build-index = "eeg_mae.build_dataset_index:main"
+eeg-build-cache = "eeg_mae.build_eeg_cache:main"
+eeg-train-color = "eeg_mae.train_eeg_color_specialist:main"
+eeg-train-edges = "eeg_mae.train_eeg_edge_specialist:main"
+
+# The repository intentionally also contains large runtime directories such as
+# data/ and runs/. Never let setuptools' flat-layout discovery treat them as
+# Python namespace packages.
+[tool.setuptools]
+packages = ["eeg_mae"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
