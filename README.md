@@ -118,6 +118,25 @@ python -m eeg_mae.train_edge_encoder --resume runs/eeg_edge_encoder/best.pt
 Run `--help` for all paths and hyperparameters. The defaults point to the two
 canonical bundle directories.
 
+## Source layout
+
+```text
+eeg_mae/
+  color_encoder.py, edge_encoder.py       public inference API
+  semantic_encoder.py                     shared EEG representation
+  color_specialist.py, edge_specialist.py task-specific model internals
+  color.py, pyramid_edge.py                frozen rendering decoders
+  color_training.py                        shared color data/training utilities
+  train_color_encoder.py                   final color training
+  train_edge_encoder.py                    final edge training
+  train_*_decoder.py, train_*_oracle.py    reproducible frozen components
+  build_*.py                               dataset and teacher-bank preparation
+```
+
+Historical compact/full-color adapters and abandoned versioned edge/color
+experiments have been removed. Every remaining module belongs to inference,
+final training, component reproduction, dataset preparation, or evaluation.
+
 ## Tests
 
 ```bash

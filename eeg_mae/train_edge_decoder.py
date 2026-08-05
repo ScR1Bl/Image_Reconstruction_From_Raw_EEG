@@ -32,7 +32,7 @@ def arguments():
     parser.add_argument(
         "--images-zip", default="data/things_eeg2_osf/image_set/training_images.zip"
     )
-    parser.add_argument("--output", default="runs/dino_pyramid_edge_oracle_v1")
+    parser.add_argument("--output", default="runs/eeg_edge_encoder/training/edge_decoder")
     parser.add_argument("--epochs", type=int, default=60)
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--eval-batch-size", type=int, default=64)

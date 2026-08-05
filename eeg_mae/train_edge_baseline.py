@@ -22,20 +22,24 @@ from .official_200way_benchmark import cached_array
 from .pyramid_edge import PyramidEdgeOutput, load_pyramid_edge_decoder, pyramid_edge_loss
 from .semantic_edge import EEGDINOGridPredictor
 from .semantic_encoder import load_semantic_encoder
-from .train_pyramid_edge_oracle import metrics as pyramid_metrics
+from .train_edge_decoder import metrics as pyramid_metrics
 
 
 def arguments():
     parser = argparse.ArgumentParser(
         description="Safely refine the strong EEG grid predictor against multi-scale edge targets"
     )
-    parser.add_argument("--semantic-encoder", default="runs/eeg_semantic_encoder_v2/best.pt")
+    parser.add_argument(
+        "--semantic-encoder", default="runs/eeg_edge_encoder/components/semantic_encoder.pt"
+    )
     parser.add_argument(
         "--resume",
         default=None,
         help="optional spatial-encoder checkpoint; omit to train from the semantic encoder",
     )
-    parser.add_argument("--pyramid-decoder", default="runs/dino_pyramid_edge_oracle_v1/best.pt")
+    parser.add_argument(
+        "--pyramid-decoder", default="runs/eeg_edge_encoder/components/edge_decoder.pt"
+    )
     parser.add_argument("--visual-bank", default="data/derived/visual_targets_dinov2s_192.pt")
     parser.add_argument("--target-bank", default="data/derived/pyramid_edge_targets_v1.pt")
     parser.add_argument(
@@ -46,7 +50,7 @@ def arguments():
     )
     parser.add_argument("--archives", default="data/things_eeg2_osf/preprocessed")
     parser.add_argument("--cache", default="data/derived/eeg_float32_cache")
-    parser.add_argument("--output", default="runs/eeg_pyramid_edges_v1")
+    parser.add_argument("--output", default="runs/eeg_edge_encoder/training/baseline")
     parser.add_argument("--epochs", type=int, default=35)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--eval-batch-size", type=int, default=16)

@@ -28,7 +28,7 @@ def arguments() -> argparse.Namespace:
     )
     parser.add_argument("--archives", default="data/things_eeg2_osf/preprocessed")
     parser.add_argument("--cache", default="data/derived/eeg_float32_cache")
-    parser.add_argument("--output", default="runs/official_200way_benchmark_v1")
+    parser.add_argument("--output", default="runs/eeg_semantic_encoder/benchmark")
     parser.add_argument(
         "--models",
         nargs="+",

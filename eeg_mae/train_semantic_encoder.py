@@ -33,11 +33,11 @@ def arguments() -> argparse.Namespace:
     )
     parser.add_argument("--archives", default="data/things_eeg2_osf/preprocessed")
     parser.add_argument("--cache", default="data/derived/eeg_float32_cache")
-    parser.add_argument("--baseline-dir", default="runs/official_200way_baselines_v1")
+    parser.add_argument("--baseline-dir", default="runs/eeg_semantic_encoder/baselines")
     parser.add_argument(
-        "--baseline-report", default="runs/official_200way_baselines_v1/report.json"
+        "--baseline-report", default="runs/eeg_semantic_encoder/baselines/report.json"
     )
-    parser.add_argument("--output", default="runs/eeg_semantic_encoder_v1")
+    parser.add_argument("--output", default="runs/eeg_semantic_encoder")
     parser.add_argument("--epochs", type=int, default=60)
     parser.add_argument("--batch-size", type=int, default=512)
     parser.add_argument("--eval-batch-size", type=int, default=256)

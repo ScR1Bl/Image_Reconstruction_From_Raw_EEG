@@ -14,7 +14,7 @@ from PIL import Image
 from scipy.ndimage import distance_transform_edt
 from torch.nn import functional as F
 
-from .build_rich_visual_targets import atomic_save, image_tensor
+from .build_visual_geometry_bank import atomic_save, image_tensor
 
 
 def arguments() -> argparse.Namespace:

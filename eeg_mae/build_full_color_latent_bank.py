@@ -1,4 +1,4 @@
-"""Export full 16x16 antiring-oracle latents for EEG supervision."""
+"""Export full 16x16 color-oracle latents for EEG supervision."""
 
 from __future__ import annotations
 
@@ -10,16 +10,16 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
-from .train_color_oracle_v2 import RichDINOColorDataset
-from .train_compact_color_tokens import load_teacher
+from .color_training import load_color_oracle
+from .train_color_oracle import RichDINOColorDataset
 
 
 def arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Build full color latent bank from oracle_v2_antiring"
+        description="Build the full color latent bank from the frozen color oracle"
     )
     parser.add_argument("--rich-bank", default="data/derived/rich_dino_color_v2")
-    parser.add_argument("--teacher", default="runs/dino_color_oracle_v2_antiring/best.pt")
+    parser.add_argument("--teacher", default="runs/eeg_color_encoder/components/color_oracle.pt")
     parser.add_argument("--output", default="data/derived/full_color_latents_antiring")
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--device", default="cuda")
@@ -33,7 +33,7 @@ def main() -> None:
     output = Path(args.output)
     source_manifest = json.loads((source / "manifest.json").read_text(encoding="utf-8"))
     filenames = source_manifest["filenames"][: args.limit]
-    teacher, payload = load_teacher(
+    teacher, payload = load_color_oracle(
         Path(args.teacher),
         torch.device(args.device if args.device != "cuda" or torch.cuda.is_available() else "cpu"),
     )

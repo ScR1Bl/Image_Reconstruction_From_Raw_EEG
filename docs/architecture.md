@@ -38,7 +38,7 @@ uncertainty, and orientation at 64 x 64.
 
 ## Why the bundles contain several checkpoints
 
-`best.pt` is the final EEG specialist. Files under `components/` are frozen
+`best.pt` is the final task-specific EEG encoder. Files under `components/` are frozen
 dependencies needed to execute it. Keeping those dependencies inside each model
 bundle makes inference reproducible and prevents accidental coupling to an old
 experiment directory.
