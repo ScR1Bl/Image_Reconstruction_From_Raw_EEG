@@ -15,8 +15,8 @@ venv/
 .vscode/
 
 # Local datasets and generated artifacts
-data/
-runs/
+/data/
+/runs/
 *.pt
 *.pth
 *.ckpt
