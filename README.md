@@ -111,8 +111,8 @@ After preparing the dataset and derived teacher banks, train or continue the
 final encoders with the stable command names:
 
 ```bash
-python -m eeg_mae.train_color_encoder --resume runs/eeg_color_encoder/best.pt
-python -m eeg_mae.train_edge_encoder --resume runs/eeg_edge_encoder/best.pt
+eeg-train-color --resume runs/eeg_color_encoder/best.pt
+eeg-train-edges --resume runs/eeg_edge_encoder/best.pt
 ```
 
 Run `--help` for all paths and hyperparameters. The defaults point to the two
@@ -122,15 +122,10 @@ canonical bundle directories.
 
 ```text
 eeg_mae/
-  color_encoder.py, edge_encoder.py       public inference API
-  semantic_encoder.py                     shared EEG representation
-  color_specialist.py, edge_specialist.py task-specific model internals
-  color.py, pyramid_edge.py                frozen rendering decoders
-  color_training.py                        shared color data/training utilities
-  train_color_encoder.py                   final color training
-  train_edge_encoder.py                    final edge training
-  train_*_decoder.py, train_*_oracle.py    reproducible frozen components
-  build_*.py                               dataset and teacher-bank preparation
+  models/       encoders, decoders, losses, and public inference pipelines
+  training/     final trainers and reproducible component-training stages
+  data/         THINGS-EEG2 indexing, caching, and teacher-bank builders
+  evaluation/   official 200-way benchmark and leakage controls
 ```
 
 Historical compact/full-color adapters and abandoned versioned edge/color

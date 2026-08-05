@@ -11,7 +11,7 @@ import torch
 from torch.nn import functional as F
 from torch.utils.data import DataLoader, Dataset
 
-from .official_200way_benchmark import (
+from ..evaluation.official_200way_benchmark import (
     REPEAT_COUNTS,
     cached_array,
     mean_metric_dict,
@@ -19,7 +19,7 @@ from .official_200way_benchmark import (
     shuffled_metrics,
     training_target_indices,
 )
-from .semantic_encoder import SubjectAdaptiveSemanticEncoder, load_semantic_encoder
+from ..models.semantic_encoder import SubjectAdaptiveSemanticEncoder, load_semantic_encoder
 
 
 def arguments() -> argparse.Namespace:

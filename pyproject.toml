@@ -24,16 +24,22 @@ visual-teachers = [
 dev = ["pytest>=8", "ruff>=0.12"]
 
 [project.scripts]
-eeg-build-index = "eeg_mae.build_dataset_index:main"
-eeg-build-cache = "eeg_mae.build_eeg_cache:main"
-eeg-train-color = "eeg_mae.train_color_encoder:main"
-eeg-train-edges = "eeg_mae.train_edge_encoder:main"
+eeg-build-index = "eeg_mae.data.build_dataset_index:main"
+eeg-build-cache = "eeg_mae.data.build_eeg_cache:main"
+eeg-train-color = "eeg_mae.training.train_color_encoder:main"
+eeg-train-edges = "eeg_mae.training.train_edge_encoder:main"
 
 # The repository intentionally also contains large runtime directories such as
 # data/ and runs/. Never let setuptools' flat-layout discovery treat them as
 # Python namespace packages.
 [tool.setuptools]
-packages = ["eeg_mae"]
+packages = [
+  "eeg_mae",
+  "eeg_mae.data",
+  "eeg_mae.evaluation",
+  "eeg_mae.models",
+  "eeg_mae.training",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

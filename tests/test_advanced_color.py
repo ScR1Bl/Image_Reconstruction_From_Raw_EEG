@@ -1,6 +1,6 @@
 import torch
 
-from eeg_mae.advanced_color import (
+from eeg_mae.models.advanced_color import (
     DINOColorOracleV2,
     FullColorLatent,
     advanced_color_loss,
@@ -8,7 +8,7 @@ from eeg_mae.advanced_color import (
     oklab_to_linear_rgb,
     oklab_to_rgb,
 )
-from eeg_mae.color import rgb_to_oklab
+from eeg_mae.models.color import rgb_to_oklab
 
 
 def test_oklab_roundtrip_is_accurate():

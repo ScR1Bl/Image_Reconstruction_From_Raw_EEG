@@ -1,8 +1,8 @@
 """Public API for the EEG color and edge encoders."""
 
-from .color_encoder import EEGColorEncoder, load_color_encoder
-from .edge_encoder import EEGEdgeEncoder, load_edge_encoder
-from .semantic_encoder import SubjectAdaptiveSemanticEncoder
+from .models.color_encoder import EEGColorEncoder, load_color_encoder
+from .models.edge_encoder import EEGEdgeEncoder, load_edge_encoder
+from .models.semantic_encoder import SubjectAdaptiveSemanticEncoder
 
 __all__ = [
     "EEGColorEncoder",

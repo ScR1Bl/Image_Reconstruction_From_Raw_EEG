@@ -11,8 +11,8 @@ import torch
 from torch.nn import functional as F
 from torch.utils.data import Dataset
 
-from .advanced_color import DINOColorOracleV2
-from .semantic_edge import EEGDINOGridPredictor
+from ..models.advanced_color import DINOColorOracleV2
+from ..models.semantic_edge import EEGDINOGridPredictor
 
 
 def load_color_oracle(path: Path, device: torch.device) -> tuple[DINOColorOracleV2, dict]:

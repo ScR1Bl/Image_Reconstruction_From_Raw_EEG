@@ -16,12 +16,12 @@ from torch import nn
 from torch.nn import functional as F
 from torch.utils.data import DataLoader, Dataset
 
-from .build_pyramid_edge_targets import PYRAMID_KEYS
-from .model_utils import grid_contrastive, grid_structure_losses
-from .official_200way_benchmark import cached_array
-from .pyramid_edge import PyramidEdgeOutput, load_pyramid_edge_decoder, pyramid_edge_loss
-from .semantic_edge import EEGDINOGridPredictor
-from .semantic_encoder import load_semantic_encoder
+from ..data.build_pyramid_edge_targets import PYRAMID_KEYS
+from ..evaluation.official_200way_benchmark import cached_array
+from ..models.model_utils import grid_contrastive, grid_structure_losses
+from ..models.pyramid_edge import PyramidEdgeOutput, load_pyramid_edge_decoder, pyramid_edge_loss
+from ..models.semantic_edge import EEGDINOGridPredictor
+from ..models.semantic_encoder import load_semantic_encoder
 from .train_edge_decoder import metrics as pyramid_metrics
 
 

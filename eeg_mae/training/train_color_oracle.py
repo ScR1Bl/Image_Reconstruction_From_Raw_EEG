@@ -17,14 +17,14 @@ from torch import nn
 from torch.nn import functional as F
 from torch.utils.data import DataLoader, Dataset, Subset
 
-from .advanced_color import (
+from ..models.advanced_color import (
     DINOColorOracleV2,
     PatchDiscriminator,
     advanced_color_loss,
     color_artifact_metrics,
     rgb_to_oklab,
 )
-from .color import ColorOutput, color_descriptor, color_metrics, load_color_decoder
+from ..models.color import ColorOutput, color_descriptor, color_metrics, load_color_decoder
 
 
 def arguments() -> argparse.Namespace:
@@ -328,7 +328,7 @@ def image(value, tile):
 
 
 def palette_image(palette, tile):
-    from .advanced_color import oklab_to_rgb
+    from ..models.advanced_color import oklab_to_rgb
 
     side = round(len(palette) ** 0.5)
     value = palette[: side * side].reshape(side, side, 3).permute(2, 0, 1)[None]

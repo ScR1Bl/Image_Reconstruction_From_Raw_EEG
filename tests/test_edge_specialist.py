@@ -1,7 +1,7 @@
 import torch
 
-from eeg_mae.edge_specialist import EEGEdgeSpecialist
-from eeg_mae.pyramid_edge import PyramidEdgeOutput, pyramid_edge_loss
+from eeg_mae.models.edge_specialist import EEGEdgeSpecialist
+from eeg_mae.models.pyramid_edge import PyramidEdgeOutput, pyramid_edge_loss
 
 
 def baseline(batch=2):

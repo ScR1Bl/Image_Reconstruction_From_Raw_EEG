@@ -4,8 +4,8 @@ import zipfile
 
 import torch
 
-from eeg_mae.build_official_test_targets import ordered_test_members
-from eeg_mae.official_200way_benchmark import (
+from eeg_mae.data.build_official_test_targets import ordered_test_members
+from eeg_mae.evaluation.official_200way_benchmark import (
     LinearEEG,
     TSConvEEG,
     retrieval_metrics,

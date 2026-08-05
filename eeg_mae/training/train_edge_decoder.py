@@ -17,9 +17,9 @@ from torch import nn
 from torch.nn import functional as F
 from torch.utils.data import DataLoader, Dataset
 
-from .build_pyramid_edge_targets import PYRAMID_KEYS
-from .model_utils import correlation_loss
-from .pyramid_edge import PyramidEdgeDecoder, PyramidEdgeOutput, pyramid_edge_loss
+from ..data.build_pyramid_edge_targets import PYRAMID_KEYS
+from ..models.model_utils import correlation_loss
+from ..models.pyramid_edge import PyramidEdgeDecoder, PyramidEdgeOutput, pyramid_edge_loss
 
 
 def arguments():

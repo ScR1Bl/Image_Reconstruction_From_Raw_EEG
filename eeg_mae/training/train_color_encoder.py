@@ -16,8 +16,9 @@ from torch import nn
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
 
-from .advanced_color import FullColorLatent, advanced_color_loss, color_artifact_metrics
-from .color import (
+from ..evaluation.official_200way_benchmark import cached_array
+from ..models.advanced_color import FullColorLatent, advanced_color_loss, color_artifact_metrics
+from ..models.color import (
     ColorOutput,
     color_descriptor,
     color_metrics,
@@ -25,7 +26,10 @@ from .color import (
     rendered_descriptor_contrastive,
     rgb_to_oklab,
 )
-from .color_specialist import EEGColorSpecialist
+from ..models.color_specialist import EEGColorSpecialist
+from ..models.semantic_edge import EEGDINOGridPredictor
+from ..models.semantic_encoder import load_semantic_encoder
+from ..models.task_adapter import TaskResidualAdapter, cvar, improvement_loss, shuffled_ranking_loss
 from .color_training import (
     EEGColorDataset,
     load_color_oracle,
@@ -33,10 +37,6 @@ from .color_training import (
     split_records,
     training_rgb_mean,
 )
-from .official_200way_benchmark import cached_array
-from .semantic_edge import EEGDINOGridPredictor
-from .semantic_encoder import load_semantic_encoder
-from .task_adapter import TaskResidualAdapter, cvar, improvement_loss, shuffled_ranking_loss
 from .train_color_oracle import selection_score, update_ema
 
 

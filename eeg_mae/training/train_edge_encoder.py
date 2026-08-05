@@ -16,18 +16,18 @@ from torch import nn
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
 
-from .build_pyramid_edge_targets import PYRAMID_KEYS
-from .edge_specialist import EEGEdgeSpecialist
-from .official_200way_benchmark import cached_array
-from .pyramid_edge import (
+from ..data.build_pyramid_edge_targets import PYRAMID_KEYS
+from ..evaluation.official_200way_benchmark import cached_array
+from ..models.edge_specialist import EEGEdgeSpecialist
+from ..models.pyramid_edge import (
     PyramidEdgeOutput,
     load_pyramid_edge_decoder,
     pyramid_edge_loss,
     pyramid_edge_sample_errors,
 )
-from .semantic_edge import EEGDINOGridPredictor
-from .semantic_encoder import load_semantic_encoder
-from .task_adapter import cvar, improvement_loss, shuffled_ranking_loss
+from ..models.semantic_edge import EEGDINOGridPredictor
+from ..models.semantic_encoder import load_semantic_encoder
+from ..models.task_adapter import cvar, improvement_loss, shuffled_ranking_loss
 from .train_color_oracle import update_ema
 from .train_edge_baseline import EEGPyramidDataset, concatenate, split_records
 from .train_edge_decoder import metrics as pyramid_metrics

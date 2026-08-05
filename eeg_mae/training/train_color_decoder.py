@@ -16,7 +16,7 @@ from torch import nn
 from torch.nn import functional as F
 from torch.utils.data import DataLoader, Dataset
 
-from .color import ColorDecoder, ColorOutput, color_loss, color_metrics
+from ..models.color import ColorDecoder, ColorOutput, color_loss, color_metrics
 
 
 def arguments() -> argparse.Namespace:

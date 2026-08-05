@@ -1,8 +1,8 @@
 import torch
 
-from eeg_mae.advanced_color import advanced_color_loss
-from eeg_mae.color import rgb_to_oklab
-from eeg_mae.color_specialist import EEGColorSpecialist
+from eeg_mae.models.advanced_color import advanced_color_loss
+from eeg_mae.models.color import rgb_to_oklab
+from eeg_mae.models.color_specialist import EEGColorSpecialist
 
 
 def tiny_model():

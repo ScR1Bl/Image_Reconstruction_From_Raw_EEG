@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import torch
 
-from eeg_mae.color import (
+from eeg_mae.models.color import (
     ColorDecoder,
     color_descriptor,
     color_loss,

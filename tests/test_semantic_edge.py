@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import torch
 
-from eeg_mae.semantic_edge import EEGDINOGridPredictor
-from eeg_mae.semantic_encoder import SubjectAdaptiveSemanticEncoder
+from eeg_mae.models.semantic_edge import EEGDINOGridPredictor
+from eeg_mae.models.semantic_encoder import SubjectAdaptiveSemanticEncoder
 
 
 def test_eeg_grid_predictor_uses_frozen_semantic_encoder():

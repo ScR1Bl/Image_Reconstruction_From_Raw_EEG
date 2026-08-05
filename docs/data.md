@@ -41,8 +41,8 @@ responses for one image remain in the same split.
 Create the index after downloading the dataset:
 
 ```bash
-python -m eeg_mae.build_dataset_index
-python -m eeg_mae.build_eeg_cache
+eeg-build-index
+eeg-build-cache
 ```
 
 The resulting split contains 661,600 EEG rows:

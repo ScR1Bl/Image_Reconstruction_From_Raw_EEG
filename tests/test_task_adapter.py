@@ -1,9 +1,9 @@
 import torch
 from torch.nn import functional as F
 
-from eeg_mae.color import ColorOutput, color_sample_errors
-from eeg_mae.pyramid_edge import PyramidEdgeDecoder, pyramid_edge_sample_errors
-from eeg_mae.task_adapter import TaskResidualAdapter, improvement_loss, shuffled_ranking_loss
+from eeg_mae.models.color import ColorOutput, color_sample_errors
+from eeg_mae.models.pyramid_edge import PyramidEdgeDecoder, pyramid_edge_sample_errors
+from eeg_mae.models.task_adapter import TaskResidualAdapter, improvement_loss, shuffled_ranking_loss
 
 
 def test_adapter_starts_as_exact_normalized_baseline_and_uniform_subjects():
@@ -36,7 +36,7 @@ def test_improvement_and_ranking_losses_reward_correct_direction():
 
 def test_color_sample_error_is_zero_for_exact_render():
     rgb = torch.rand(2, 3, 32, 32)
-    from eeg_mae.color import color_descriptor
+    from eeg_mae.models.color import color_descriptor
 
     error, _ = color_sample_errors(
         ColorOutput(rgb, color_descriptor(rgb)), rgb, color_descriptor(rgb)

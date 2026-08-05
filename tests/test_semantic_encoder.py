@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import torch
 
-from eeg_mae.official_200way_benchmark import LinearEEG
-from eeg_mae.semantic_encoder import SubjectAdaptiveSemanticEncoder
-from eeg_mae.train_semantic_encoder import semantic_loss
+from eeg_mae.evaluation.official_200way_benchmark import LinearEEG
+from eeg_mae.models.semantic_encoder import SubjectAdaptiveSemanticEncoder
+from eeg_mae.training.train_semantic_encoder import semantic_loss
 
 
 def test_encoder_accepts_full_and_cropped_windows():

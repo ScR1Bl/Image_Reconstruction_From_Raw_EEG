@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import torch
 
-from eeg_mae.build_pyramid_edge_targets import derive_targets
-from eeg_mae.pyramid_edge import PyramidEdgeDecoder, pyramid_edge_loss
+from eeg_mae.data.build_pyramid_edge_targets import derive_targets
+from eeg_mae.models.pyramid_edge import PyramidEdgeDecoder, pyramid_edge_loss
 
 
 def test_target_derivation_produces_true_resolution_pyramid():
