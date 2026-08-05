@@ -41,7 +41,7 @@ python -m pip install -e ".[dev,visual-teachers]"
 
 Model weights are not stored in Git because the complete bundles are about
 400 MB. Download both archives from the
-[models-v1 release](https://github.com/ScR1Bl/GSN_EEG/releases/tag/models-v1)
+[models-v1 release](https://github.com/ScR1Bl/Image_Reconstruction_From_Raw_EEG/releases/tag/models-v1)
 and unpack them into:
 
 ```text
