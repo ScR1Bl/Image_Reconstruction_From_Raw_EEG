@@ -43,6 +43,23 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--weight-decay", type=float, default=1e-3)
     parser.add_argument("--base-freeze-epochs", type=int, default=3)
     parser.add_argument("--patience", type=int, default=12)
+    # Step 1b: fuzja podmiotow. "legacy" = trening per-subject jak w 1a;
+    # "mean"/"attention" = ensemble z losowym N (EnsembleTrunkLightning).
+    parser.add_argument("--fusion", choices=("legacy", "mean", "attention"), default="legacy")
+    parser.add_argument("--n1-prob", type=float, default=0.25)
+    parser.add_argument(
+        "--trunk-checkpoint",
+        default="artifacts/eeg_encoder/baseline-lightning/checkpoints/semantic_encoder.ckpt",
+        help="trunk startowy dla trybow ensemble (Lightning .ckpt)",
+    )
+    parser.add_argument("--fusion-lr", type=float, default=3e-4)
+    parser.add_argument("--ensemble-base-lr", type=float, default=1e-5)
+    parser.add_argument("--ensemble-residual-lr", type=float, default=1e-4)
+    parser.add_argument(
+        "--freeze-trunk",
+        action="store_true",
+        help="zamroz trunk (N=1 bitowo = init); uczy sie tylko fuzja; monitor=val/mrr_n10",
+    )
     return parser.parse_args()
 
 
@@ -50,6 +67,44 @@ def main() -> None:
     args = arguments()
     run_dir = prepare_run_dir(MODEL_NAME, args)
     L.seed_everything(args.seed)
+    if args.fusion != "legacy":
+        from .common import sha256_of_file
+        from .data import EnsembleDataModule
+        from .ensemble_trunk import EnsembleTrunkLightning
+
+        module = EnsembleTrunkLightning(
+            trunk_checkpoint=args.trunk_checkpoint,
+            trunk_sha256=sha256_of_file(args.trunk_checkpoint),
+            fusion=args.fusion,
+            n1_prob=args.n1_prob,
+            freeze_trunk=args.freeze_trunk,
+            base_lr=args.ensemble_base_lr,
+            residual_lr=args.ensemble_residual_lr,
+            fusion_lr=args.fusion_lr,
+            weight_decay=args.weight_decay,
+        )
+        datamodule = EnsembleDataModule(
+            training_bank=args.training_bank,
+            index=args.index,
+            archives=args.archives,
+            cache=args.cache,
+            batch_size=args.batch_size,
+            eval_batch_size=args.eval_batch_size,
+            seed=args.seed,
+            smoke=args.smoke,
+        )
+        trainer = build_trainer(
+            run_dir,
+            args,
+            max_epochs=args.epochs,
+            gradient_clip_val=5.0,
+            # przy zamrozonym trunku val/mrr_n1 jest stala - selekcja po n10
+            monitor="val/mrr_n10" if args.freeze_trunk else "val/mrr_n1",
+            patience=args.patience,
+            mode="max",
+        )
+        trainer.fit(module, datamodule=datamodule)
+        return
     if args.init_checkpoint:
         module = SemanticEncoderLightning.load_from_checkpoint(
             args.init_checkpoint, map_location="cpu"

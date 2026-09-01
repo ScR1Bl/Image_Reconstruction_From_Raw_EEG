@@ -57,6 +57,7 @@ def build_trainer(
     gradient_clip_val: float,
     monitor: str,
     patience: int,
+    mode: str = "min",
 ) -> L.Trainer:
     use_cuda = args.device == "cuda" and torch.cuda.is_available()
     return L.Trainer(
@@ -73,11 +74,11 @@ def build_trainer(
                 dirpath=str(run_dir / "checkpoints"),
                 filename="best",
                 monitor=monitor,
-                mode="min",
+                mode=mode,
                 save_top_k=1,
                 save_last=True,
             ),
-            EarlyStopping(monitor=monitor, mode="min", patience=patience),
+            EarlyStopping(monitor=monitor, mode=mode, patience=patience),
         ],
         deterministic=False,
         enable_progress_bar=True,

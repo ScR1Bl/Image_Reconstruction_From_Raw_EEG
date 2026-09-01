@@ -16,6 +16,7 @@ import json
 from pathlib import Path
 
 import lightning as L
+import numpy as np
 import torch
 from lightning.pytorch.utilities import CombinedLoader
 from torch.nn import functional as F
@@ -76,6 +77,76 @@ class SemanticDataModule(L.LightningDataModule):
 
     def val_dataloader(self):
         return CombinedLoader(self._val_loaders, mode="sequential")
+
+
+class EnsembleEEGDataset(torch.utils.data.Dataset):
+    """RAM-preloaded ensemble samples: [10, 17, 100] repetition-averaged EEG per
+    stimulus + DINO target. Preload kills the measured 90% data-wait bottleneck
+    (Step 1b Faza 0: 44.1 s/epoch, 39.5 s waiting on memmap reads)."""
+
+    def __init__(self, arrays, conditions, targets: torch.Tensor) -> None:
+        stacks = []
+        for array in arrays:
+            subject = np.asarray(array[conditions], dtype=np.float32).mean(1)
+            stacks.append(torch.from_numpy(subject))
+        self.eeg = torch.stack(stacks, dim=1)  # [M, 10, 17, 100]
+        self.targets = targets
+
+    def __len__(self) -> int:
+        return len(self.eeg)
+
+    def __getitem__(self, index: int):
+        return self.eeg[index], self.targets[index]
+
+
+class EnsembleDataModule(L.LightningDataModule):
+    """Ensemble data for Step 1b trunk training (random-N fusion)."""
+
+    def __init__(
+        self,
+        training_bank: str = "data/derived/visual_targets_dinov2s_192.pt",
+        index: str = "data/things_eeg2_osf/preprocessed_train_all_subjects_holdout_index.csv",
+        archives: str = "data/things_eeg2_osf/preprocessed",
+        cache: str = "data/derived/eeg_float32_cache",
+        batch_size: int = 512,
+        eval_batch_size: int = 256,
+        seed: int = 20260714,
+        smoke: bool = False,
+    ) -> None:
+        super().__init__()
+        self.save_hyperparameters()
+
+    def setup(self, stage: str | None = None) -> None:
+        hp = self.hparams
+        train_bank = torch.load(hp.training_bank, map_location="cpu", weights_only=False)
+        visual_train = F.normalize(train_bank["dino_global"].float(), dim=-1)
+        target_indices, train_indices, validation_indices = training_target_indices(
+            Path(hp.index), train_bank
+        )
+        if hp.smoke:
+            train_indices = train_indices[:1024]
+            validation_indices = validation_indices[:512]
+        arrays = _training_arrays(hp.archives, hp.cache)
+        train_targets = visual_train[target_indices[train_indices]]
+        val_targets = visual_train[target_indices[validation_indices]]
+        self._train = EnsembleEEGDataset(arrays, train_indices, train_targets)
+        self._val = EnsembleEEGDataset(arrays, validation_indices, val_targets)
+
+    def train_dataloader(self):
+        generator = torch.Generator().manual_seed(self.hparams.seed)
+        return DataLoader(
+            self._train,
+            batch_size=self.hparams.batch_size,
+            shuffle=True,
+            generator=generator,
+            drop_last=True,
+            num_workers=0,
+        )
+
+    def val_dataloader(self):
+        return DataLoader(
+            self._val, batch_size=self.hparams.eval_batch_size, shuffle=False, num_workers=0
+        )
 
 
 class ColorDataModule(L.LightningDataModule):

@@ -38,7 +38,7 @@ from .official_200way_benchmark import (
     shuffled_metrics,
 )
 
-MODEL_KINDS = ("semantic-legacy", "semantic-lightning")
+MODEL_KINDS = ("semantic-legacy", "semantic-lightning", "ensemble-lightning")
 
 
 def arguments() -> argparse.Namespace:
@@ -55,6 +55,11 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--shuffle-permutations", type=int, default=100)
     parser.add_argument("--seed", type=int, default=20260714)
     parser.add_argument("--device", default="cuda")
+    # Step 1b: krzywa N. Podanie --ensemble-n wlacza tryb ensemble (fuzja po
+    # podmiotach na 80 repetycjach); brak flagi = niezmieniona sciezka legacy.
+    parser.add_argument("--ensemble-n", nargs="+", type=int, default=None)
+    parser.add_argument("--subset-draws", type=int, default=10)
+    parser.add_argument("--subset-seed", type=int, default=20260714)
     parser.add_argument("--output", default=None, help="optional path for the JSON report")
     parser.add_argument(
         "--reference-report",
@@ -75,6 +80,13 @@ def load_model(kind: str, checkpoint: str | Path, device: torch.device):
         from ..lightning.eeg_encoder import SemanticEncoderLightning
 
         module = SemanticEncoderLightning.load_from_checkpoint(
+            checkpoint, map_location="cpu", strict=True
+        )
+        return module.to(device).eval()
+    if kind == "ensemble-lightning":
+        from ..lightning.ensemble_trunk import EnsembleTrunkLightning
+
+        module = EnsembleTrunkLightning.load_from_checkpoint(
             checkpoint, map_location="cpu", strict=True
         )
         return module.to(device).eval()
@@ -154,6 +166,69 @@ def official_report(model, arrays, visual_test, args, device) -> dict:
     return {"aggregate": aggregate, "per_subject": per_subject}
 
 
+def ensemble_report(model, kind: str, arrays, visual_test, args, device) -> dict:
+    """N-curve at 80 repetitions: per-subject embeddings once, then fusion over
+    subject subsets. For the Lightning ensemble model the learned fusion is
+    used (identity-indexed); legacy kinds get the raw-mean gate fusion."""
+
+    embed_model = model.trunk if hasattr(model, "trunk") else model
+    if kind == "ensemble-lightning":
+
+        def fuse(embeddings: torch.Tensor, ids: torch.Tensor) -> torch.Tensor:
+            fused, _ = model.fusion(embeddings.to(device), ids.to(device))
+            return fused.cpu()
+
+    else:
+
+        def fuse(embeddings: torch.Tensor, ids: torch.Tensor) -> torch.Tensor:
+            return embeddings.mean(1)
+
+    per_subject = [
+        predict_official(embed_model, eeg, subject, 80, 0, args.seed, device, args.eval_batch_size)
+        for subject, eeg in enumerate(arrays)
+    ]
+    stacked = torch.stack(per_subject, dim=1)  # [200, 10, dim]
+    generator = torch.Generator().manual_seed(args.subset_seed)
+    report = {}
+    for count in sorted(set(args.ensemble_n)):
+        if count == 1:
+            subsets = [[subject] for subject in range(10)]
+        elif count >= 10:
+            subsets = [list(range(10))]
+        else:
+            subsets = [
+                sorted(torch.randperm(10, generator=generator)[:count].tolist())
+                for _ in range(args.subset_draws)
+            ]
+        records, first_scores = [], None
+        for subset in subsets:
+            ids = torch.tensor(subset)
+            with torch.no_grad():
+                fused = fuse(stacked[:, ids], ids)
+            metrics, scores = retrieval_metrics(fused, visual_test)
+            records.append(metrics)
+            if first_scores is None:
+                first_scores = scores
+        entry = {
+            "subsets": subsets,
+            "aggregate": mean_metric_dict(records),
+            "shuffled": shuffled_metrics(first_scores, args.shuffle_permutations, args.seed + 99),
+        }
+        if count == 1:
+            entry["per_subject"] = {
+                str(subset[0]): record for subset, record in zip(subsets, records)
+            }
+        report[str(count)] = entry
+        print(
+            f"N={count}: top1={entry['aggregate']['top1']:.4f} "
+            f"top5={entry['aggregate']['top5']:.4f} "
+            f"median={entry['aggregate']['median_rank']:.1f} "
+            f"({len(subsets)} podzbior(ow))",
+            flush=True,
+        )
+    return report
+
+
 def main() -> None:
     args = arguments()
     device = torch.device(
@@ -169,6 +244,34 @@ def main() -> None:
         cached_array(Path(args.archives), Path(args.cache), subject, "test")
         for subject in range(10)
     ]
+
+    if args.ensemble_n:
+        result = {
+            "protocol": {
+                "conditions": 200,
+                "repetitions": 80,
+                "subjects": 10,
+                "seed": args.seed,
+                "subset_seed": args.subset_seed,
+                "subset_draws": args.subset_draws,
+                "model": args.model,
+                "checkpoint": str(args.checkpoint),
+            },
+            "ensemble": ensemble_report(model, args.model, test_arrays, visual_test, args, device),
+        }
+        if args.output:
+            out = Path(args.output)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(json.dumps(result, indent=2), encoding="utf-8")
+        summary = {
+            n: {
+                key: round(entry["aggregate"][key], 4)
+                for key in ("top1", "top5", "median_rank", "mrr")
+            }
+            for n, entry in result["ensemble"].items()
+        }
+        print(json.dumps(summary, indent=2), flush=True)
+        return
 
     result = {
         "protocol": {
