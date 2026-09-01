@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Subject-adaptive semantic and spatial-edge EEG encoders for THINGS-EEG2"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = ["numpy>=1.26", "Pillow>=10", "torch>=2.2"]
+dependencies = ["numpy>=1.26", "Pillow>=10", "torch>=2.2", "lightning>=2.4"]
 
 [project.optional-dependencies]
 # Step 0.5: usunieto einops/kornia/timm — zero importow w repo (AUDIT.md, sekcja 5).
@@ -37,6 +37,7 @@ packages = [
   "eeg_mae",
   "eeg_mae.data",
   "eeg_mae.evaluation",
+  "eeg_mae.lightning",
   "eeg_mae.models",
   "eeg_mae.training",
 ]
