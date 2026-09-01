@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments and editors
+.venv/
+venv/
+.idea/
+.vscode/
+
+# Local datasets and generated artifacts
+/data/
+/runs/
+/artifacts/
+*.pt
+*.pth
+*.ckpt
+*.npy
+*.npz
+*.zip
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Claude Code
+.claude/
+CLAUDE.md
+/EEG Vault/
