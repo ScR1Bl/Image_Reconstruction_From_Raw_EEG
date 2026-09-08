@@ -102,6 +102,54 @@ ZWERYFIKOWANA co do flag (defaulty build_full_color_latent_bank.py:21-22: teache
 runs/eeg_color_encoder/components/color_oracle.pt, wejście rich_dino_color_v2).
 Zależy od recepty 6 + wag oracle (z treningu albo z bundle'a release models-v1).
 
+## 8. clip_targets_vitl14_laion2b.pt (bank CLIP-image, Step 2)
+
+```powershell
+.venv\Scripts\python.exe -m eeg_mae.data.build_clip_targets
+```
+ZWERYFIKOWANA (defaulty build_clip_targets.py; teacher
+laion/CLIP-ViT-L-14-laion2B-s32B-b82K, projected CLS 768-d,
+**embeddingi SUROWE — nienormalizowane** (statystyki norm są wejściem Step 3);
+porządek wierszy = posortowane image_file z indeksu, kontrakt jak bank DINO —
+training_target_indices działa bez zmian).
+
+## 9. official_clip_targets_vitl14_laion2b.pt (CLIP dla oficjalnego testu 200)
+
+```powershell
+.venv\Scripts\python.exe -m eeg_mae.data.build_clip_targets `
+  --official-test `
+  --images-zip data/things_eeg2_osf/image_set/test_images.zip `
+  --output data/derived/official_clip_targets_vitl14_laion2b.pt
+```
+ZWERYFIKOWANA (porządek folderów 00001..00200 przez ordered_test_members,
+z twardą walidacją jak w banku DINO).
+
+## 10. vae_latents_pixart512.pt (momenty posteriora VAE, Step 3)
+
+```powershell
+.venv\Scripts\python.exe -m eeg_mae.data.build_vae_latents
+```
+ZWERYFIKOWANA (defaulty build_vae_latents.py; VAE z PixArt-alpha/PixArt-XL-2-512x512,
+resize krótszy bok→512 bicubic + center crop, [N,8,64,64] fp16 = mean(0:4)+std(4:8);
+samplowanie i mnożenie przez scaling_factor 0.18215 W TRENINGU, nie w banku).
+
+## 11. official_vae_latents_pixart512.pt (VAE dla oficjalnego testu 200)
+
+```powershell
+.venv\Scripts\python.exe -m eeg_mae.data.build_vae_latents `
+  --official-test `
+  --images-zip data/things_eeg2_osf/image_set/test_images.zip `
+  --output data/derived/official_vae_latents_pixart512.pt
+```
+ZWERYFIKOWANA (porządek 00001..00200 jak w bankach CLIP/DINO).
+
+Uwaga środowiskowa Step 3: T5-XXL ładować WYŁĄCZNIE wariantem fp16
+(`variant="fp16"`) — pełne shardy fp32 (19 GB) zabijają proces na 32 GB RAM
+tej maszyny twardym exit 5. Null-embedding + prompty raz na dysk
+(artifacts/dit_adapter/t5_embeddings.pt: 'null' = pusty string T5 per konwencja
+pipeline'u, 'null_learned' = caption_projection.y_embedding z checkpointu);
+pipeline potem z text_encoder=None.
+
 ## Kolejność pełnego odtworzenia od zera
 
 0 → 1 → 2 → 3 → 4 → 5 → 6 → [trening color_oracle] → 7.

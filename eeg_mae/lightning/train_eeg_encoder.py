@@ -36,6 +36,7 @@ def arguments() -> argparse.Namespace:
         "--baseline-dir", default=None, help="katalog linear_subject_XX.pt do inicjalizacji od zera"
     )
     parser.add_argument("--epochs", type=int, default=60)
+    parser.add_argument("--val-every", type=int, default=1)
     parser.add_argument("--batch-size", type=int, default=512)
     parser.add_argument("--eval-batch-size", type=int, default=256)
     parser.add_argument("--base-lr", type=float, default=3e-5)
@@ -60,6 +61,21 @@ def arguments() -> argparse.Namespace:
         action="store_true",
         help="zamroz trunk (N=1 bitowo = init); uczy sie tylko fuzja; monitor=val/mrr_n10",
     )
+    # Step 2b: trunk pod inna przestrzen docelowa.
+    parser.add_argument("--target-key", default="dino_global")
+    parser.add_argument(
+        "--output-dim",
+        type=int,
+        default=None,
+        help="wymiar wyjscia trunku (wyklucza --trunk-checkpoint; np. 768 dla CLIP)",
+    )
+    parser.add_argument(
+        "--warm-start-checkpoint",
+        default=None,
+        help="trunk-artefakt .ckpt: skopiuj czesci wspoldzielone o ksztaltach "
+        "niezaleznych od output_dim (input_norm, channel_*, temporal_spatial, "
+        "LayerNorm projekcji, residual_gate); reszta swieza",
+    )
     return parser.parse_args()
 
 
@@ -72,19 +88,62 @@ def main() -> None:
         from .data import EnsembleDataModule
         from .ensemble_trunk import EnsembleTrunkLightning
 
-        module = EnsembleTrunkLightning(
-            trunk_checkpoint=args.trunk_checkpoint,
-            trunk_sha256=sha256_of_file(args.trunk_checkpoint),
-            fusion=args.fusion,
-            n1_prob=args.n1_prob,
-            freeze_trunk=args.freeze_trunk,
-            base_lr=args.ensemble_base_lr,
-            residual_lr=args.ensemble_residual_lr,
-            fusion_lr=args.fusion_lr,
-            weight_decay=args.weight_decay,
-        )
+        if args.output_dim:
+            # Nowa przestrzen docelowa: trunk swiezy (opcjonalnie warm-start
+            # czesci wspoldzielonych); pelny trunk-checkpoint nie pasuje ksztaltem.
+            module = EnsembleTrunkLightning(
+                trunk_config={"output_dim": args.output_dim},
+                fusion=args.fusion,
+                n1_prob=args.n1_prob,
+                freeze_trunk=args.freeze_trunk,
+                base_lr=args.ensemble_base_lr,
+                residual_lr=args.ensemble_residual_lr,
+                fusion_lr=args.fusion_lr,
+                weight_decay=args.weight_decay,
+            )
+            if args.warm_start_checkpoint:
+                from .common import load_trunk_state
+
+                source = load_trunk_state(args.warm_start_checkpoint, None)
+                shared = {
+                    key: value
+                    for key, value in source.items()
+                    if key in module.trunk.state_dict()
+                    and module.trunk.state_dict()[key].shape == value.shape
+                }
+                expected_prefixes = (
+                    "input_norm_weight",
+                    "input_norm_bias",
+                    "channel_scale",
+                    "channel_bias",
+                    "temporal_spatial",
+                    "temporal_project.0",
+                    "residual_gate",
+                )
+                unexpected = [key for key in shared if not key.startswith(expected_prefixes)]
+                if unexpected:
+                    raise SystemExit(f"warm-start: nieoczekiwane pasujace klucze {unexpected}")
+                missing, _ = module.trunk.load_state_dict(shared, strict=False)
+                print(
+                    f"warm-start: skopiowano {len(shared)} tensorow wspoldzielonych, "
+                    f"{len(missing)} swiezych",
+                    flush=True,
+                )
+        else:
+            module = EnsembleTrunkLightning(
+                trunk_checkpoint=args.trunk_checkpoint,
+                trunk_sha256=sha256_of_file(args.trunk_checkpoint),
+                fusion=args.fusion,
+                n1_prob=args.n1_prob,
+                freeze_trunk=args.freeze_trunk,
+                base_lr=args.ensemble_base_lr,
+                residual_lr=args.ensemble_residual_lr,
+                fusion_lr=args.fusion_lr,
+                weight_decay=args.weight_decay,
+            )
         datamodule = EnsembleDataModule(
             training_bank=args.training_bank,
+            target_key=args.target_key,
             index=args.index,
             archives=args.archives,
             cache=args.cache,
@@ -102,6 +161,7 @@ def main() -> None:
             monitor="val/mrr_n10" if args.freeze_trunk else "val/mrr_n1",
             patience=args.patience,
             mode="max",
+            check_val_every=args.val_every,
         )
         trainer.fit(module, datamodule=datamodule)
         return

@@ -48,6 +48,7 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--model", choices=MODEL_KINDS, default="semantic-legacy")
     parser.add_argument("--test-bank", default="data/derived/official_test_targets_dinov2s_192.pt")
+    parser.add_argument("--test-bank-key", default="dino_global")
     parser.add_argument("--archives", default="data/things_eeg2_osf/preprocessed")
     parser.add_argument("--cache", default="data/derived/eeg_float32_cache")
     parser.add_argument("--eval-batch-size", type=int, default=256)
@@ -188,6 +189,13 @@ def ensemble_report(model, kind: str, arrays, visual_test, args, device) -> dict
         for subject, eeg in enumerate(arrays)
     ]
     stacked = torch.stack(per_subject, dim=1)  # [200, 10, dim]
+    pred_norms = stacked.flatten(0, 1).norm(dim=-1)
+    norm_stats = {"pred_mean": float(pred_norms.mean()), "pred_std": float(pred_norms.std())}
+    print(
+        f"normy predykcji per-subject: {norm_stats['pred_mean']:.3f} "
+        f"+/- {norm_stats['pred_std']:.3f}",
+        flush=True,
+    )
     generator = torch.Generator().manual_seed(args.subset_seed)
     report = {}
     for count in sorted(set(args.ensemble_n)):
@@ -226,6 +234,7 @@ def ensemble_report(model, kind: str, arrays, visual_test, args, device) -> dict
             f"({len(subsets)} podzbior(ow))",
             flush=True,
         )
+    report["_prediction_norms"] = norm_stats
     return report
 
 
@@ -239,7 +248,8 @@ def main() -> None:
 
     model = load_model(args.model, args.checkpoint, device)
     test_bank = torch.load(args.test_bank, map_location="cpu", weights_only=False)
-    visual_test = F.normalize(test_bank["dino_global"].float(), dim=-1)
+    raw_test = test_bank[args.test_bank_key].float()
+    visual_test = F.normalize(raw_test, dim=-1)
     test_arrays = [
         cached_array(Path(args.archives), Path(args.cache), subject, "test")
         for subject in range(10)
@@ -258,6 +268,10 @@ def main() -> None:
                 "checkpoint": str(args.checkpoint),
             },
             "ensemble": ensemble_report(model, args.model, test_arrays, visual_test, args, device),
+            "true_norms": {
+                "mean": float(raw_test.norm(dim=-1).mean()),
+                "std": float(raw_test.norm(dim=-1).std()),
+            },
         }
         if args.output:
             out = Path(args.output)
@@ -269,6 +283,11 @@ def main() -> None:
                 for key in ("top1", "top5", "median_rank", "mrr")
             }
             for n, entry in result["ensemble"].items()
+            if not n.startswith("_")
+        }
+        summary["norms"] = {
+            "pred": result["ensemble"]["_prediction_norms"],
+            "true": result["true_norms"],
         }
         print(json.dumps(summary, indent=2), flush=True)
         return

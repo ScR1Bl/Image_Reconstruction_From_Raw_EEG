@@ -58,6 +58,9 @@ def build_trainer(
     monitor: str,
     patience: int,
     mode: str = "min",
+    check_val_every: int = 1,
+    accumulate_grad_batches: int = 1,
+    save_weights_only: bool = False,
 ) -> L.Trainer:
     use_cuda = args.device == "cuda" and torch.cuda.is_available()
     return L.Trainer(
@@ -67,6 +70,8 @@ def build_trainer(
         # fp16 autocast jak w starych trenerach (torch.autocast('cuda', float16)).
         precision="16-mixed" if use_cuda else "32-true",
         gradient_clip_val=gradient_clip_val,
+        check_val_every_n_epoch=check_val_every,
+        accumulate_grad_batches=accumulate_grad_batches,
         default_root_dir=str(run_dir),
         logger=CSVLogger(save_dir=str(run_dir), name="logs"),
         callbacks=[
@@ -77,6 +82,7 @@ def build_trainer(
                 mode=mode,
                 save_top_k=1,
                 save_last=True,
+                save_weights_only=save_weights_only,
             ),
             EarlyStopping(monitor=monitor, mode=mode, patience=patience),
         ],

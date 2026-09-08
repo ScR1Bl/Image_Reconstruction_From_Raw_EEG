@@ -105,6 +105,7 @@ class EnsembleDataModule(L.LightningDataModule):
     def __init__(
         self,
         training_bank: str = "data/derived/visual_targets_dinov2s_192.pt",
+        target_key: str = "dino_global",
         index: str = "data/things_eeg2_osf/preprocessed_train_all_subjects_holdout_index.csv",
         archives: str = "data/things_eeg2_osf/preprocessed",
         cache: str = "data/derived/eeg_float32_cache",
@@ -119,7 +120,9 @@ class EnsembleDataModule(L.LightningDataModule):
     def setup(self, stage: str | None = None) -> None:
         hp = self.hparams
         train_bank = torch.load(hp.training_bank, map_location="cpu", weights_only=False)
-        visual_train = F.normalize(train_bank["dino_global"].float(), dim=-1)
+        # Targety normalizowane jak dotad; loss i retrieval sa kierunkowe
+        # (normalizacja wewnatrz), wiec bank surowy vs znormalizowany bez roznicy.
+        visual_train = F.normalize(train_bank[hp.target_key].float(), dim=-1)
         target_indices, train_indices, validation_indices = training_target_indices(
             Path(hp.index), train_bank
         )

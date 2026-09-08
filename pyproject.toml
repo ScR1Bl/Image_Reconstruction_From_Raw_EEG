@@ -20,8 +20,12 @@ visual-teachers = [
   "torchvision>=0.20",
   "scipy>=1.12",
   "opencv-python>=4.9",
+  # Step 2 (ablacja przestrzeni docelowej): EVA02-CLIP nie ma klasy w transformers
+  "open-clip-torch>=2.24",
 ]
 dev = ["pytest>=8", "ruff>=0.12"]
+# Step 3: zamrozony PixArt-alpha (DiT) + adapter
+dit = ["diffusers>=0.31", "sentencepiece>=0.2", "accelerate>=1.0", "tiktoken>=0.7"]
 
 [project.scripts]
 eeg-build-index = "eeg_mae.data.build_dataset_index:main"
