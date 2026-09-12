@@ -55,7 +55,9 @@ def main():
         log.parent.mkdir(exist_ok=True)
         update(state="running", stage=name, command=command, log=str(log))
         with log.open("w", encoding="utf-8") as handle:
-            result = subprocess.run(command, stdout=handle, stderr=subprocess.STDOUT, timeout=7200)
+            result = subprocess.run(
+                command, stdout=handle, stderr=subprocess.STDOUT, timeout=7200, check=False
+            )
         if result.returncode or not report.exists():
             raise RuntimeError(f"{name} failed (exit {result.returncode}); see {log}")
         status["completed"].append({"stage": name, "reused": False})

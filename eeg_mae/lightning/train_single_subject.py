@@ -106,7 +106,7 @@ def main():
         "torch_version": torch.__version__,
         "lightning_version": L.__version__,
         "git_commit": subprocess.run(
-            ["git", "rev-parse", "HEAD"], capture_output=True, text=True
+            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=False
         ).stdout.strip(),
         "source_sha256": hashlib.sha256(
             b"".join(
@@ -172,8 +172,9 @@ def main():
     if args.init_ridge and not args.resume:
         module.initialize_ridge(args.init_ridge)
     if args.ridge_alpha is not None and not args.resume:
-        from ..training.train_geometry_probes import prepare_eeg, ridge_basis, fit_from_basis
         from torch.nn import functional as F
+
+        from ..training.train_geometry_probes import fit_from_basis, prepare_eeg, ridge_basis
 
         rows = datasets["train"].rows
         features = prepare_eeg(bank.mean_eeg(4, args.end_ms))[rows]
