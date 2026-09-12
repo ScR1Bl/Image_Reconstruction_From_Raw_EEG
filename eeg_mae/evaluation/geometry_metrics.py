@@ -107,3 +107,31 @@ def retrieval_metrics(prediction, target, chunk_size=256):
         "candidates": len(truth),
         "tie_policy": "uniform expectation",
     }
+
+
+def semantic_category_metrics(prediction, target, concepts, chunk_size=256):
+    """Category of the retrieved image and discrimination within its category.
+
+    This is image-gallery retrieval, not a separately trained text classifier.
+    Both metrics give fractional credit for tied similarities.
+    """
+    pred = F.normalize(prediction.float(), dim=-1)
+    truth = F.normalize(target.float(), dim=-1)
+    if len(pred) != len(truth) or len(concepts) != len(pred) or not len(pred):
+        raise ValueError("expected aligned nonempty predictions, targets and concepts")
+    vocabulary = {name: i for i, name in enumerate(sorted(set(concepts)))}
+    labels = torch.tensor([vocabulary[name] for name in concepts], device=pred.device)
+    category_scores = []
+    for start in range(0, len(pred), chunk_size):
+        scores = pred[start : start + chunk_size] @ truth.T
+        tied = scores == scores.max(1, keepdim=True).values
+        correct = labels[start : start + len(scores), None] == labels[None]
+        category_scores.append(((tied & correct).sum(1) / tied.sum(1)).cpu())
+    within = same_category_2afc(pred, truth, concepts)
+    return {
+        "retrieved_image_category_top1": float(torch.cat(category_scores).mean()),
+        "categories": len(vocabulary),
+        "semantic_within_category_2afc": within["accuracy"],
+        "semantic_within_category_pairs": within["pairs"],
+        "classification_definition": "category of nearest image in this gallery",
+    }

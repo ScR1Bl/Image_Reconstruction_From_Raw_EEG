@@ -137,6 +137,8 @@ class SingleSubjectLightning(L.LightningModule):
             loss = loss + 0.22 * rare_chroma_loss(output.image.chroma_logits16, target)
             # The old local color oracle may have seen the new test images.
             # Direct RGB supervision deliberately avoids this checkpoint.
+        if not torch.isfinite(loss):
+            raise FloatingPointError(f"non-finite {self.task} training loss")
         self.log("train/loss", loss, on_step=False, on_epoch=True, batch_size=len(batch["eeg"]))
         return loss
 

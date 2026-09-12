@@ -73,3 +73,58 @@ def test_ridge_can_initialize_existing_semantic_linear_path(tmp_path):
     torch.testing.assert_close(
         model(eeg), torch.nn.functional.linear(x, weight, bias), rtol=1e-4, atol=1e-5
     )
+
+
+def test_epoch_resume_matches_uninterrupted_optimizer_and_ema(tmp_path):
+    import lightning as L
+    from torch.utils.data import DataLoader
+
+    torch.set_num_threads(2)
+    generator = torch.Generator().manual_seed(51)
+    samples = [
+        {
+            "eeg": torch.randn(17, 40, generator=generator),
+            "target": torch.randn(384, generator=generator),
+            "row": i,
+        }
+        for i in range(12)
+    ]
+
+    def run(directory, epochs, checkpoint=None):
+        directory.mkdir()
+        L.seed_everything(91)
+        module = SingleSubjectLightning(task="dino", end_ms=200, protocol_sha256="resume-test")
+        trainer = L.Trainer(
+            accelerator="cpu",
+            devices=1,
+            max_epochs=epochs,
+            logger=False,
+            enable_checkpointing=False,
+            enable_progress_bar=False,
+            enable_model_summary=False,
+            num_sanity_val_steps=0,
+            default_root_dir=str(directory),
+            deterministic=True,
+        )
+        trainer.fit(
+            module,
+            DataLoader(samples, batch_size=4, shuffle=True),
+            DataLoader(samples, batch_size=6),
+            ckpt_path=checkpoint,
+            weights_only=False,
+        )
+        return module, trainer
+
+    whole, full_trainer = run(tmp_path / "whole", 2)
+    _, first_trainer = run(tmp_path / "first", 1)
+    checkpoint = tmp_path / "epoch.ckpt"
+    first_trainer.save_checkpoint(checkpoint)
+    resumed, resumed_trainer = run(tmp_path / "resumed", 2, checkpoint)
+    assert full_trainer.global_step == resumed_trainer.global_step == 6
+    for key, value in whole.state_dict().items():
+        torch.testing.assert_close(value, resumed.state_dict()[key], rtol=0, atol=0, msg=key)
+    full_state = full_trainer.optimizers[0].state_dict()["state"]
+    resumed_state = resumed_trainer.optimizers[0].state_dict()["state"]
+    for parameter in full_state:
+        for key, value in full_state[parameter].items():
+            torch.testing.assert_close(value, resumed_state[parameter][key], rtol=0, atol=0)

@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import platform
+import subprocess
 import time
 from pathlib import Path
 
@@ -14,7 +17,7 @@ from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 from lightning.pytorch.loggers import CSVLogger
 from torch.utils.data import DataLoader
 
-from ..data.single_subject import SingleSubjectBank, SingleSubjectDataset
+from ..data.single_subject import SingleSubjectBank, SingleSubjectDataset, training_folds
 from ..evaluation.geometry_metrics import geometry_metrics, retrieval_metrics
 from .single_subject import SingleSubjectLightning
 
@@ -71,11 +74,19 @@ def main():
     parser.add_argument("--compact", action="store_true")
     parser.add_argument("--repeat-augmentation", action="store_true")
     parser.add_argument("--init-ridge", type=Path)
+    parser.add_argument("--oof-fold", type=int, choices=(-1, 0, 1, 2), default=-1)
+    parser.add_argument("--ridge-alpha", type=float)
     parser.add_argument("--resume", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--evaluate-test", action="store_true")
     args = parser.parse_args()
+    if args.oof_fold >= 0 and (args.init_ridge or args.evaluate_test or args.limit_images):
+        raise ValueError(
+            "OOF runs must not use full-train initialization, test or image truncation"
+        )
+    if args.ridge_alpha is not None and args.task not in {"dino", "clip_b32", "synclr"}:
+        raise ValueError("ridge initialization is for semantic tasks")
     if (args.output / "checkpoints").exists() and not args.resume:
         raise RuntimeError("existing run: use --resume or choose a fresh directory")
     args.output.mkdir(parents=True, exist_ok=True)
@@ -91,6 +102,18 @@ def main():
         "training_subjects": [args.subject],
         "inference_subjects": [args.subject],
         "selection_split": "val",
+        "python_version": platform.python_version(),
+        "torch_version": torch.__version__,
+        "lightning_version": L.__version__,
+        "git_commit": subprocess.run(
+            ["git", "rev-parse", "HEAD"], capture_output=True, text=True
+        ).stdout.strip(),
+        "source_sha256": hashlib.sha256(
+            b"".join(
+                str(path.relative_to(Path(__file__).parents[1])).encode() + path.read_bytes()
+                for path in sorted(Path(__file__).parents[1].rglob("*.py"))
+            )
+        ).hexdigest(),
     }
     if args.resume:
         previous = json.loads((args.output / "config.json").read_text(encoding="utf-8"))
@@ -101,8 +124,12 @@ def main():
             "protocol_sha256",
             "compact",
             "repeat_augmentation",
+            "oof_fold",
+            "batch_size",
+            "seed",
+            "lr",
         ):
-            if previous[key] != config[key]:
+            if previous.get(key, -1 if key == "oof_fold" else None) != config[key]:
                 raise ValueError(f"resume configuration changed {key}")
     else:
         (args.output / "config.json").write_text(
@@ -119,6 +146,10 @@ def main():
         )
         for split in ("train", "val")
     }
+    folds = training_folds(bank.rows)
+    if args.oof_fold >= 0:
+        train_rows = datasets["train"].rows
+        datasets["train"].rows = train_rows[folds[train_rows] != args.oof_fold]
     loaders = {
         s: DataLoader(
             d,
@@ -140,6 +171,18 @@ def main():
     )
     if args.init_ridge and not args.resume:
         module.initialize_ridge(args.init_ridge)
+    if args.ridge_alpha is not None and not args.resume:
+        from ..training.train_geometry_probes import prepare_eeg, ridge_basis, fit_from_basis
+        from torch.nn import functional as F
+
+        rows = datasets["train"].rows
+        features = prepare_eeg(bank.mean_eeg(4, args.end_ms))[rows]
+        targets = F.normalize(torch.from_numpy(bank.targets[args.task][rows]), dim=-1)
+        weight, bias = fit_from_basis(ridge_basis(features), targets, args.ridge_alpha)
+        with torch.no_grad():
+            module.model.linear_weight[0].copy_(weight)
+            module.model.linear_bias[0].copy_(bias)
+            module.ema.load_state_dict(module.model.state_dict())
     module.concepts = [row["concept"] for row in bank.rows]
     checkpoint = ModelCheckpoint(
         dirpath=args.output / "checkpoints",
@@ -173,6 +216,7 @@ def main():
         loaders["train"],
         loaders["val"],
         ckpt_path=str(args.resume) if args.resume else None,
+        weights_only=False,  # Our full checkpoint includes optimizer and NumPy RNG state.
     )
     selected = SingleSubjectLightning.load_from_checkpoint(
         checkpoint.best_model_path, map_location="cpu", weights_only=False
@@ -184,10 +228,19 @@ def main():
         "protocol_sha256": bank.protocol["sha256"],
         "sequence_disjoint_verified": False,
         "test_evaluated": args.evaluate_test,
+        "oof_fold": args.oof_fold,
         "best_checkpoint": checkpoint.best_model_path,
         "fit_seconds": time.monotonic() - started,
         "evaluation": {},
     }
+    if args.oof_fold >= 0:
+        dataset = SingleSubjectDataset(bank, "train", args.task, end_ms=args.end_ms)
+        dataset.rows = dataset.rows[folds[dataset.rows] == args.oof_fold]
+        _, rows, pred = evaluate(
+            selected, dataset, args.batch_size, torch.device("cuda" if use_cuda else "cpu")
+        )
+        np.savez_compressed(args.output / "predictions_oof_r4.npz", rows=rows, prediction=pred)
+        report["oof_images"] = len(rows)
     for split in ["val"] + (["test"] if args.evaluate_test else []):
         for repeats in (1, 2, 4):
             dataset = SingleSubjectDataset(

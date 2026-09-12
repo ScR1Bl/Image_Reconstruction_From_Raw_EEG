@@ -87,6 +87,19 @@ def load_protocol(path: str | Path) -> dict:
     return result
 
 
+def training_folds(rows: list[dict], count: int = 3) -> np.ndarray:
+    """Image-level folds only inside training; validation/test always have -1."""
+    groups = defaultdict(list)
+    for index, row in enumerate(rows):
+        if row["split"] == "train":
+            groups[row["concept"]].append(index)
+    folds = np.full(len(rows), -1, dtype=np.int64)
+    for group in groups.values():
+        for position, index in enumerate(sorted(group, key=lambda i: rows[i]["image_index"])):
+            folds[index] = position % count
+    return folds
+
+
 class SingleSubjectBank:
     """Aligned targets; no EEG from a second participant is loaded."""
 

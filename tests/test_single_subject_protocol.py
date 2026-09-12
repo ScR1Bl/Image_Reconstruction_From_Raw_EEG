@@ -50,3 +50,36 @@ def test_geometry_distinguishes_same_category_locations_and_ties():
     assert wrong["within_category_2afc"] == 0
     mean = target.mean(0, keepdim=True).expand_as(target)
     assert same_category_2afc(mean, target, ["plane", "plane"])["accuracy"] == 0.5
+
+
+def test_semantic_category_metrics_do_not_reward_constant_prediction():
+    from eeg_mae.evaluation.geometry_metrics import semantic_category_metrics
+
+    truth = torch.eye(4)
+    labels = ["a", "a", "b", "b"]
+    null = semantic_category_metrics(torch.zeros_like(truth), truth, labels)
+    assert null["retrieved_image_category_top1"] == 0.5
+    assert null["semantic_within_category_2afc"] == 0.5
+    perfect = semantic_category_metrics(truth, truth, labels)
+    assert perfect["retrieved_image_category_top1"] == 1
+    assert perfect["semantic_within_category_2afc"] == 1
+
+
+def test_oof_is_image_disjoint_and_never_includes_validation_or_test():
+    from eeg_mae.data.single_subject import training_folds
+
+    rows = [
+        {
+            "image_index": i,
+            "concept": "plane",
+            "split": "train" if i < 6 else "val" if i < 8 else "test",
+        }
+        for i in range(10)
+    ]
+    folds = training_folds(rows)
+    assert folds.tolist() == [0, 1, 2, 0, 1, 2, -1, -1, -1, -1]
+    for fold in range(3):
+        fit = {i for i, row in enumerate(rows) if row["split"] == "train" and folds[i] != fold}
+        held = {i for i, row in enumerate(rows) if row["split"] == "train" and folds[i] == fold}
+        assert not fit & held
+        assert len(fit) == 4 and len(held) == 2
