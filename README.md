@@ -25,6 +25,12 @@ at inference. Color and geometry overlap in real images, but their supervision
 and output representations serve different reconstruction roles.
 See [the architecture notes](docs/architecture.md) for the full data flow.
 
+The separate [single-subject geometry experiment](docs/single_subject_geometry.md)
+adds a frozen 6/2/2 image split, Lightning training of one participant, semantic
+teacher comparisons and out-of-fold tests of extra geometry from edge/color
+predictions. Its checkpoints live under `runs/single_subject_geometry/` and are
+not promoted production bundles. Install `.[training]` for these entry points.
+
 ## Installation
 
 Python 3.10+ and PyTorch 2.2+ are required.
