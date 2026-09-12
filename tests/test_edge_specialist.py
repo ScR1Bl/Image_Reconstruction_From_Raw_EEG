@@ -48,26 +48,29 @@ def tiny_model():
     )
 
 
-def test_edge_specialist_starts_as_exact_baseline_and_trains():
+def test_edge_specialist_predicts_directly_and_trains():
     model = tiny_model()
-    base = baseline()
-    result = model(torch.randn(2, 3, 4, 20), base)
-    for field in PyramidEdgeOutput.__dataclass_fields__:
-        torch.testing.assert_close(
-            getattr(result.pyramid, field), getattr(base, field), atol=1e-4, rtol=1e-4
-        )
+    result = model(torch.randn(2, 3, 4, 20))
     loss, _ = pyramid_edge_loss(result.pyramid, targets())
     loss.backward()
     assert model.encoder.branches[0][0].weight.grad is not None
-    assert model.refiner.head64.weight.grad is not None
+    assert model.decoder.head64.weight.grad is not None
     assert result.condition.grid16.shape == (2, 16, 16, 32)
 
 
 def test_edge_specialist_rejects_incomplete_subject_ensemble():
     model = tiny_model()
     try:
-        model(torch.randn(1, 2, 4, 20), baseline(1))
+        model(torch.randn(1, 2, 4, 20))
     except ValueError as error:
         assert "3" in str(error)
     else:
         raise AssertionError("incomplete EEG ensemble was accepted")
+
+
+def test_edge_model_has_no_semantic_or_image_baseline_dependency():
+    model = tiny_model().eval()
+    assert not hasattr(model, "predictor") and not hasattr(model, "baseline")
+    first = model(torch.zeros(1, 3, 4, 20)).pyramid.semantic_logits32
+    second = model(torch.ones(1, 3, 4, 20)).pyramid.semantic_logits32
+    assert not torch.allclose(first, second)

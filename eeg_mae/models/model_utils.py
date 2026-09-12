@@ -89,3 +89,22 @@ def grid_structure_losses(
     ):
         gradients.append((1 - F.cosine_similarity(pred_delta, target_delta, dim=-1)).mean())
     return residual, torch.stack(gradients).mean()
+
+
+def variance_covariance_regularization(
+    representation: torch.Tensor, target_std: float = 0.5
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """VICReg-style anti-collapse terms for a batch of task-specific embeddings."""
+    value = representation.float().flatten(1)
+    if len(value) < 2:
+        zero = value.sum() * 0
+        return zero, zero
+    value = value - value.mean(0, keepdim=True)
+    std = (value.var(0, unbiased=False) + 1e-4).sqrt()
+    variance = F.relu(target_std - std).mean()
+    # Normalize before covariance so this remains stable for high-dimensional grids.
+    value = value / std.clamp_min(1e-3)
+    covariance = value.T @ value / max(len(value) - 1, 1)
+    covariance.fill_diagonal_(0)
+    covariance = covariance.square().mean()
+    return variance, covariance

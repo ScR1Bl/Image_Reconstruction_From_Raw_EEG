@@ -12,6 +12,9 @@ dependencies = ["numpy>=1.26", "Pillow>=10", "torch>=2.2"]
 
 [project.optional-dependencies]
 visual-teachers = [
+  "accelerate>=1.0",
+  "diffusers>=0.34",
+  "huggingface-hub>=0.27",
   "Pillow>=10",
   "transformers>=5.0",
   "torchvision>=0.20",
@@ -26,8 +29,13 @@ dev = ["pytest>=8", "ruff>=0.12"]
 [project.scripts]
 eeg-build-index = "eeg_mae.data.build_dataset_index:main"
 eeg-build-cache = "eeg_mae.data.build_eeg_cache:main"
+eeg-build-hierarchical-targets = "eeg_mae.data.build_hierarchical_visual_targets:main"
 eeg-train-color = "eeg_mae.training.train_color_encoder:main"
+eeg-train-color-hybrid = "eeg_mae.training.train_hybrid_color_encoder:main"
 eeg-train-edges = "eeg_mae.training.train_edge_encoder:main"
+eeg-train-hierarchical = "eeg_mae.training.train_hierarchical_semantic_encoder:main"
+eeg-build-fusion-conditions = "eeg_mae.data.build_fusion_condition_bank:main"
+eeg-train-fusion-prior = "eeg_mae.training.train_fusion_prior:main"
 
 # The repository intentionally also contains large runtime directories such as
 # data/ and runs/. Never let setuptools' flat-layout discovery treat them as

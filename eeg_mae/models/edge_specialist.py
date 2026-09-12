@@ -1,4 +1,4 @@
-"""Independent raw-EEG structure encoder and stable multi-scale edge refiner."""
+"""Independent raw-EEG structure encoder with direct multi-scale edge heads."""
 
 from __future__ import annotations
 
@@ -139,18 +139,14 @@ class MultiscaleEEGStructureEncoder(nn.Module):
         }
 
 
-def _logit(probability: torch.Tensor) -> torch.Tensor:
-    return torch.logit(probability.float().clamp(1e-4, 1 - 1e-4))
-
-
-class StableEdgeRefiner(nn.Module):
-    """Predict gated residuals around a frozen EEG edge baseline without deconvolution."""
+class DirectPyramidEdgeDecoder(nn.Module):
+    """HED-style deeply supervised edge pyramid decoded only from structure tokens."""
 
     def __init__(self, input_dim: int = 192, width: int = 128) -> None:
         super().__init__()
         self.input_dim, self.width = input_dim, width
         self.stem = nn.Sequential(
-            nn.Conv2d(input_dim + 2, width, 1), ResidualConv(width), ResidualConv(width)
+            nn.Conv2d(input_dim, width, 1), ResidualConv(width), ResidualConv(width)
         )
         self.head16 = nn.Conv2d(width, 2, 3, padding=1)
         self.up32 = nn.Sequential(
@@ -166,42 +162,27 @@ class StableEdgeRefiner(nn.Module):
             ResidualConv(width // 2),
         )
         self.head64 = nn.Conv2d(width // 2, 6, 3, padding=1)
-        for head in (self.head16, self.head32, self.head64):
-            nn.init.zeros_(head.weight)
-            nn.init.zeros_(head.bias)
-        self.gate16 = nn.Parameter(torch.tensor(-2.5))
-        self.gate32 = nn.Parameter(torch.tensor(-2.5))
-        self.gate64 = nn.Parameter(torch.tensor(-2.5))
 
-    def forward(
-        self, condition: StructureCondition, baseline: PyramidEdgeOutput
-    ) -> EdgeSpecialistOutput:
+    def forward(self, condition: StructureCondition) -> EdgeSpecialistOutput:
         grid = condition.grid16.permute(0, 3, 1, 2).float()
-        base16 = torch.cat((baseline.shape_logits16.sigmoid(), baseline.distance16), 1)
-        level16 = self.stem(torch.cat((grid, base16), 1))
-        delta16 = self.head16(level16)
-        gate16 = torch.sigmoid(self.gate16)
-        shape = baseline.shape_logits16 + gate16 * delta16[:, :1]
-        distance = (baseline.distance16 + 0.25 * gate16 * torch.tanh(delta16[:, 1:2])).clamp(0, 1)
+        level16 = self.stem(grid)
+        coarse = self.head16(level16)
         level32 = self.up32(level16)
-        delta32 = self.head32(level32)
-        gate32 = torch.sigmoid(self.gate32)
-        semantic = baseline.semantic_logits32 + gate32 * delta32
+        semantic = self.head32(level32)
         level64 = self.up64(level32)
-        delta64 = self.head64(level64)
-        gate64 = torch.sigmoid(self.gate64)
-        perceptual = baseline.perceptual_logits64 + gate64 * delta64[:, :1]
-        crisp = baseline.crisp_logits64 + gate64 * delta64[:, 1:2]
-        confidence = torch.sigmoid(_logit(baseline.confidence64) + gate64 * delta64[:, 2:3])
-        uncertainty = torch.sigmoid(_logit(baseline.uncertainty64) + gate64 * delta64[:, 3:4])
-        orientation = F.normalize(
-            baseline.orientation64 + 0.25 * gate64 * torch.tanh(delta64[:, 4:6]), dim=1, eps=1e-5
-        )
+        fine = self.head64(level64)
+        orientation = F.normalize(torch.tanh(fine[:, 4:6]), dim=1, eps=1e-5)
         pyramid = PyramidEdgeOutput(
-            shape, distance, semantic, perceptual, crisp, confidence, uncertainty, orientation
+            coarse[:, :1],
+            coarse[:, 1:2].sigmoid(),
+            semantic,
+            fine[:, :1],
+            fine[:, 1:2],
+            fine[:, 2:3].sigmoid(),
+            fine[:, 3:4].sigmoid(),
+            orientation,
         )
-        gates = {"level16": gate16, "level32": gate32, "level64": gate64}
-        return EdgeSpecialistOutput(pyramid, condition, gates)
+        return EdgeSpecialistOutput(pyramid, condition, {})
 
     def config(self) -> dict:
         return {"input_dim": self.input_dim, "width": self.width}
@@ -213,57 +194,32 @@ class EEGEdgeSpecialist(nn.Module):
     ) -> None:
         super().__init__()
         self.encoder = MultiscaleEEGStructureEncoder(**(encoder_config or {}))
-        self.refiner = StableEdgeRefiner(**(refiner_config or {}))
-
-    def forward(self, eeg: torch.Tensor, baseline: PyramidEdgeOutput) -> EdgeSpecialistOutput:
-        return self.refiner(self.encoder(eeg), baseline)
-
-    def config(self) -> dict:
-        return {"encoder_config": self.encoder.config(), "refiner_config": self.refiner.config()}
-
-
-class EEGEdgeEncoderPipeline(nn.Module):
-    """Self-contained inference pipeline loaded from ``runs/eeg_edge_encoder``."""
-
-    def __init__(self, specialist, predictor, decoder) -> None:
-        super().__init__()
-        self.specialist = specialist
-        self.predictor = predictor
-        self.decoder = decoder
+        self.decoder = DirectPyramidEdgeDecoder(**(refiner_config or {}))
 
     def forward(self, eeg: torch.Tensor) -> EdgeSpecialistOutput:
-        grid, _ = self.predictor.forward_ensemble(eeg)
-        baseline = self.decoder(grid)
-        return self.specialist(eeg, baseline)
+        return self.decoder(self.encoder(eeg))
+
+    def config(self) -> dict:
+        return {"encoder_config": self.encoder.config(), "refiner_config": self.decoder.config()}
+
+
+class EEGEdgeEncoderPipeline(EEGEdgeSpecialist):
+    """Deployment name for the self-contained direct EEG-to-edge model."""
 
 
 def load_eeg_edge_encoder(
     root: str | Path = "runs/eeg_edge_encoder", device: torch.device | str = "cpu"
 ) -> tuple[EEGEdgeEncoderPipeline, dict]:
-    from .semantic_edge import EEGDINOGridPredictor
-    from .semantic_encoder import SubjectAdaptiveSemanticEncoder
-
     root = Path(root)
-    components = root / "components"
     state = torch.load(root / "best.pt", map_location="cpu", weights_only=False)
-    specialist = EEGEdgeSpecialist(**state["model_config"])
+    if state.get("architecture") != "independent_direct_edge_v1":
+        raise RuntimeError(
+            "legacy baseline-dependent edge checkpoint; train the independent model with "
+            "eeg-train-edges --init-from <legacy-best.pt>"
+        )
+    specialist = EEGEdgeEncoderPipeline(**state["model_config"])
     specialist.load_state_dict(state.get("ema", state["model"]), strict=True)
-    semantic_state = torch.load(
-        components / "semantic_encoder.pt", map_location="cpu", weights_only=False
-    )
-    semantic = SubjectAdaptiveSemanticEncoder(**semantic_state["model_config"])
-    semantic.load_state_dict(semantic_state["model"], strict=True)
-    baseline_state = torch.load(components / "baseline.pt", map_location="cpu", weights_only=False)
-    predictor = EEGDINOGridPredictor(semantic, **baseline_state["model_config"])
-    predictor.load_state_dict(baseline_state["model"], strict=True)
-    from .pyramid_edge import PyramidEdgeDecoder
-
-    decoder_state = torch.load(
-        components / "edge_decoder.pt", map_location="cpu", weights_only=False
-    )
-    decoder = PyramidEdgeDecoder(**decoder_state["model_config"])
-    decoder.load_state_dict(decoder_state["model"], strict=True)
-    pipeline = EEGEdgeEncoderPipeline(specialist, predictor, decoder).to(device).eval()
-    for parameter in pipeline.parameters():
+    pipeline = specialist.to(device).eval()
+    for parameter in specialist.parameters():
         parameter.requires_grad_(False)
     return pipeline, state

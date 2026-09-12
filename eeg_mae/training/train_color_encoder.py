@@ -1,4 +1,4 @@
-"""Train the final color-only EEG encoder on top of its frozen baseline."""
+"""Train the independent raw-EEG color encoder by direct task supervision."""
 
 from __future__ import annotations
 
@@ -22,18 +22,15 @@ from ..models.color import (
     ColorOutput,
     color_descriptor,
     color_metrics,
-    load_color_decoder,
     rendered_descriptor_contrastive,
     rgb_to_oklab,
 )
 from ..models.color_specialist import EEGColorSpecialist
-from ..models.semantic_edge import EEGDINOGridPredictor
-from ..models.semantic_encoder import load_semantic_encoder
-from ..models.task_adapter import TaskResidualAdapter, cvar, improvement_loss, shuffled_ranking_loss
+from ..models.model_utils import variance_covariance_regularization
+from ..models.task_adapter import cvar, shuffled_ranking_loss
 from .color_training import (
     EEGColorDataset,
     load_color_oracle,
-    semantic_ensemble,
     split_records,
     training_rgb_mean,
 )
@@ -42,13 +39,6 @@ from .train_color_oracle import selection_score, update_ema
 
 def arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Independent color-specialized raw EEG encoder")
-    parser.add_argument("--adapter", default="runs/eeg_color_encoder/components/adapter.pt")
-    parser.add_argument(
-        "--semantic-encoder", default="runs/eeg_color_encoder/components/semantic_encoder.pt"
-    )
-    parser.add_argument(
-        "--color-decoder", default="runs/eeg_color_encoder/components/color_decoder.pt"
-    )
     parser.add_argument("--latent-bank", default="data/derived/full_color_latents_antiring")
     parser.add_argument("--rich-bank", default="data/derived/rich_dino_color_v2")
     parser.add_argument(
@@ -67,39 +57,14 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--weight-decay", type=float, default=0.015)
     parser.add_argument("--patience", type=int, default=9)
     parser.add_argument("--ema-decay", type=float, default=0.998)
-    parser.add_argument("--margin", type=float, default=0.008)
     parser.add_argument("--rank-margin", type=float, default=0.035)
     parser.add_argument("--panel-images", type=int, default=8)
     parser.add_argument("--seed", type=int, default=20260811)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--resume", default=None)
+    parser.add_argument("--init-from", default=None, help="warm-start matching EEG encoder weights")
     parser.add_argument("--smoke", action="store_true")
     return parser.parse_args()
-
-
-class FrozenColorBaseline:
-    def __init__(
-        self, path: Path, semantic_path: str, decoder_path: str, device: torch.device
-    ) -> None:
-        payload = torch.load(path, map_location="cpu", weights_only=False)
-        encoder = load_semantic_encoder(semantic_path, device)
-        self.predictor = EEGDINOGridPredictor(encoder, **payload["predictor_config"]).to(device)
-        self.predictor.load_state_dict(payload["predictor"], strict=True)
-        self.adapter = TaskResidualAdapter(**payload["adapter_config"]).to(device)
-        self.adapter.load_state_dict(payload["adapter"], strict=True)
-        self.decoder, self.decoder_payload = load_color_decoder(decoder_path, device)
-        self.payload = payload
-        for model in (self.predictor, self.adapter, self.decoder):
-            model.eval()
-            for parameter in model.parameters():
-                parameter.requires_grad_(False)
-
-    @torch.no_grad()
-    def __call__(self, eeg: torch.Tensor) -> torch.Tensor:
-        grid, contexts = self.predictor.forward_ensemble(eeg)
-        global_feature = semantic_ensemble(self.predictor, eeg)
-        adapted = self.adapter(grid, contexts, global_feature)
-        return self.decoder(adapted.grid, adapted.global_feature).rgb32.float()
 
 
 def color_sample_error(rgb: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
@@ -125,13 +90,7 @@ def rare_chroma_loss(logits: torch.Tensor, target_rgb: torch.Tensor) -> torch.Te
     return sum((loss * weights).mean() for loss in losses) / 2
 
 
-def residual_smoothness(delta: torch.Tensor) -> torch.Tensor:
-    return (delta[..., 1:, :] - delta[..., :-1, :]).abs().mean() + (
-        delta[..., :, 1:] - delta[..., :, :-1]
-    ).abs().mean()
-
-
-def train_epoch(model, ema, baseline, oracle, loader, optimizer, scaler, device, args):
+def train_epoch(model, ema, oracle, loader, optimizer, scaler, device, args):
     model.train()
     totals = {}
     batches = 0
@@ -144,13 +103,10 @@ def train_epoch(model, ema, baseline, oracle, loader, optimizer, scaler, device,
             batch["grid"].float().to(device), batch["global"].float().to(device)
         )
         with torch.no_grad(), torch.autocast("cuda", torch.float16, enabled=device.type == "cuda"):
-            base32 = baseline(eeg)
-            base = F.interpolate(base32, target.shape[-2:], mode="bilinear", align_corners=False)
             teacher = oracle.decode_full_latent(true_latent)
-            base_error = color_sample_error(base, target)
         optimizer.zero_grad(set_to_none=True)
         with torch.autocast("cuda", torch.float16, enabled=device.type == "cuda"):
-            output = model(eeg, base32)
+            output = model(eeg)
             reconstruction, parts = advanced_color_loss(output.image, target)
             oracle_chroma = F.smooth_l1_loss(
                 output.image.oklab[:, 1:], teacher.oklab[:, 1:], beta=0.012
@@ -170,7 +126,6 @@ def train_epoch(model, ema, baseline, oracle, loader, optimizer, scaler, device,
             error = color_sample_error(output.image.rgb, target)
             task = error.mean()
             hard = cvar(error)
-            improve = improvement_loss(error, base_error, args.margin)
             order = torch.roll(torch.arange(len(target), device=device), 1)
             wrong_error = color_sample_error(output.image.rgb, target[order])
             ranking = (
@@ -182,9 +137,9 @@ def train_epoch(model, ema, baseline, oracle, loader, optimizer, scaler, device,
             target_std = target.flatten(1).std(0, unbiased=False).mean()
             output_std = output.image.rgb.flatten(1).std(0, unbiased=False).mean()
             diversity = F.relu(0.72 * target_std - output_std)
-            smooth = residual_smoothness(output.chroma_delta16)
-            delta = output.chroma_delta16.square().mean()
-            alpha_open = F.relu(0.06 - output.alpha16.mean())
+            representation = output.condition.grid16.mean((1, 2))
+            variance, covariance = variance_covariance_regularization(representation)
+            spatial_spread = F.relu(0.35 - output.condition.grid16.std((1, 2)).mean())
             loss = (
                 reconstruction
                 + 0.55 * oracle_chroma
@@ -193,13 +148,12 @@ def train_epoch(model, ema, baseline, oracle, loader, optimizer, scaler, device,
                 + 0.15 * contrastive
                 + 0.45 * task
                 + 0.65 * hard
-                + 1.6 * improve
                 + 0.40 * ranking
                 + 0.22 * rare
                 + 0.40 * diversity
-                + 0.04 * smooth
-                + 0.004 * delta
-                + 0.08 * alpha_open
+                + 0.20 * variance
+                + 0.04 * covariance
+                + 0.10 * spatial_spread
             )
         scaler.scale(loss).backward()
         scaler.unscale_(optimizer)
@@ -212,7 +166,6 @@ def train_epoch(model, ema, baseline, oracle, loader, optimizer, scaler, device,
             "loss": loss,
             "task": task,
             "hard": hard,
-            "improvement": improve,
             "ranking": ranking,
             "oracle_chroma": oracle_chroma,
             "oracle_palette": oracle_palette,
@@ -220,9 +173,9 @@ def train_epoch(model, ema, baseline, oracle, loader, optimizer, scaler, device,
             "contrastive": contrastive,
             "rare_chroma": rare,
             "diversity": diversity,
-            "residual_smoothness": smooth,
-            "residual_energy": delta,
-            "alpha": output.alpha16.mean(),
+            "representation_variance": variance,
+            "representation_covariance": covariance,
+            "spatial_spread": spatial_spread,
             **parts,
         }
         for key, value in values.items():
@@ -231,10 +184,9 @@ def train_epoch(model, ema, baseline, oracle, loader, optimizer, scaler, device,
 
 
 @torch.no_grad()
-def predict(model, baseline, loader, device, hard=False):
+def predict(model, loader, device, hard=False):
     model.eval()
     predictions = []
-    baselines = []
     targets = []
     oklabs = []
     linear = []
@@ -242,23 +194,16 @@ def predict(model, baseline, loader, device, hard=False):
     for batch in loader:
         eeg = batch["eeg"].to(device)
         with torch.autocast("cuda", torch.float16, enabled=device.type == "cuda"):
-            base32 = baseline(eeg)
-            output = model(eeg, base32, hard_chroma=hard)
+            output = model(eeg, hard_chroma=hard)
         predictions.append(output.image.rgb.float().cpu())
         oklabs.append(output.image.oklab.float().cpu())
         linear.append(output.image.linear_rgb.float().cpu())
-        baselines.append(
-            F.interpolate(
-                base32.float(), output.image.rgb.shape[-2:], mode="bilinear", align_corners=False
-            ).cpu()
-        )
         targets.append(batch["rgb"].float())
         names.extend(batch["filename"])
     return (
         torch.cat(predictions),
         torch.cat(oklabs),
         torch.cat(linear),
-        torch.cat(baselines),
         torch.cat(targets),
         names,
     )
@@ -277,36 +222,18 @@ def image_metrics(prediction, target, train_mean, oklab=None, linear=None):
     return values
 
 
-def evaluate(model, baseline, loader, device, train_mean, seed=None, hard=False):
-    prediction, oklab, linear, base, target, _ = predict(model, baseline, loader, device, hard)
+def evaluate(model, loader, device, train_mean, seed=None, hard=False):
+    prediction, oklab, linear, target, _ = predict(model, loader, device, hard)
     clean = image_metrics(prediction, target, train_mean, oklab, linear)
-    baseline_metrics = image_metrics(base, target, train_mean)
     if seed is None:
-        return clean, baseline_metrics
+        return clean
     order = torch.randperm(len(prediction), generator=torch.Generator().manual_seed(seed))
     shuffled = image_metrics(prediction[order], target, train_mean, oklab[order], linear[order])
-    return clean, baseline_metrics, shuffled
+    return clean, shuffled
 
 
-def encoder_score(value, shuffled, adapter):
-    """Prefer measurable visual improvement over descriptor-only gains."""
-    return (
-        selection_score(value, shuffled)
-        + 2.0 * (adapter["rgb_mae"] - value["rgb_mae"])
-        + 3.0 * (adapter["chroma_mae"] - value["chroma_mae"])
-        + 0.8 * (value["palette_pearson"] - adapter["palette_pearson"])
-        - 2.0 * max(0.0, value["chroma_edge_artifact"] - adapter["chroma_edge_artifact"])
-    )
-
-
-def strictly_beats_adapter(value, adapter, score_value, adapter_score):
-    return (
-        score_value > adapter_score
-        and value["rgb_mae"] < adapter["rgb_mae"]
-        and value["chroma_mae"] < adapter["chroma_mae"]
-        and value["palette_pearson"] > adapter["palette_pearson"]
-        and value["chroma_edge_artifact"] <= adapter["chroma_edge_artifact"] + 5e-5
-    )
+def encoder_score(value, shuffled):
+    return selection_score(value, shuffled)
 
 
 def to_image(value, tile):
@@ -315,26 +242,23 @@ def to_image(value, tile):
 
 
 @torch.no_grad()
-def save_panel(model, baseline, oracle, dataset, device, path, count):
+def save_panel(model, oracle, dataset, device, path, count):
     samples = [dataset[index] for index in range(min(count, len(dataset)))]
     if not samples:
         return
     eeg = torch.stack([sample["eeg"] for sample in samples]).to(device)
     grid = torch.stack([sample["grid"] for sample in samples]).float().to(device)
     glob = torch.stack([sample["global"] for sample in samples]).float().to(device)
-    base32 = baseline(eeg)
-    base = F.interpolate(base32, (64, 64), mode="bilinear", align_corners=False)
     model.eval()
-    soft = model(eeg, base32)
-    hard = model(eeg, base32, hard_chroma=True)
+    soft = model(eeg)
+    hard = model(eeg, hard_chroma=True)
     teacher = oracle.decode_full_latent(FullColorLatent(grid, glob))
     headers = (
         "target",
-        "frozen baseline",
-        "color encoder",
+        "color direct",
         "encoder argmax",
         "oracle",
-        "difference x4",
+        "error x2",
     )
     tile, label = 128, 22
     canvas = Image.new("RGB", (len(headers) * tile, (len(samples) + 1) * (tile + label)), "white")
@@ -344,10 +268,9 @@ def save_panel(model, baseline, oracle, dataset, device, path, count):
     for row, sample in enumerate(samples):
         y = (row + 1) * (tile + label)
         draw.text((3, y - label + 3), sample["filename"], fill="black")
-        difference = (soft.image.rgb[row] - base[row]).abs().mul(4).clamp(0, 1)
+        difference = (soft.image.rgb[row] - sample["rgb"].to(device)).abs().mul(2).clamp(0, 1)
         values = (
             sample["rgb"],
-            base[row].cpu(),
             soft.image.rgb[row].cpu(),
             hard.image.rgb[row].cpu(),
             teacher.rgb[row].cpu(),
@@ -401,13 +324,21 @@ def main() -> None:
         for key, value in datasets.items()
     }
     train_mean = training_rgb_mean(datasets["train"])
-    baseline = FrozenColorBaseline(
-        Path(args.adapter), args.semantic_encoder, args.color_decoder, device
-    )
     oracle, oracle_payload = load_color_oracle(Path(args.oracle_renderer), device)
     for parameter in oracle.parameters():
         parameter.requires_grad_(False)
     model = EEGColorSpecialist().to(device)
+    if args.init_from and not args.resume:
+        warm = torch.load(args.init_from, map_location="cpu", weights_only=False)
+        source = warm.get("ema", warm["model"])
+        current = model.state_dict()
+        matching = {
+            key: value
+            for key, value in source.items()
+            if key.startswith("encoder.") and key in current and current[key].shape == value.shape
+        }
+        model.load_state_dict(matching, strict=False)
+        print(f"warm-started {len(matching)} color EEG tensors from {args.init_from}", flush=True)
     ema = copy.deepcopy(model).eval()
     for parameter in ema.parameters():
         parameter.requires_grad_(False)
@@ -434,15 +365,8 @@ def main() -> None:
     history = output / "history.jsonl"
     if not args.resume:
         history.unlink(missing_ok=True)
-    initial, adapter_validation, initial_shuffled = evaluate(
-        ema, baseline, loaders["val"], device, train_mean, args.seed
-    )
-    initial_score = encoder_score(initial, initial_shuffled, adapter_validation)
-    # Evaluate the frozen adapter with its own shuffled output for an apples-to-apples threshold.
-    _, _, _, adapter_images, targets, _ = predict(ema, baseline, loaders["val"], device)
-    order = torch.randperm(len(adapter_images), generator=torch.Generator().manual_seed(args.seed))
-    adapter_shuffled = image_metrics(adapter_images[order], targets, train_mean)
-    adapter_score = selection_score(adapter_validation, adapter_shuffled)
+    initial, initial_shuffled = evaluate(ema, loaders["val"], device, train_mean, args.seed)
+    initial_score = encoder_score(initial, initial_shuffled)
     if start == 0:
         best = initial_score
         payload = {
@@ -455,40 +379,32 @@ def main() -> None:
             "scaler": scaler.state_dict(),
             "best_score": best,
             "stale": 0,
-            "adapter_score": adapter_score,
-            "adapter": args.adapter,
             "oracle_renderer": args.oracle_renderer,
             "latent_bank_manifest": manifest,
-            "record": {"validation": initial, "adapter_validation": adapter_validation},
+            "architecture": "independent_direct_color_v1",
+            "record": {"validation": initial, "shuffled": initial_shuffled},
         }
         torch.save(payload, output / "best.pt")
         print(
-            f"initial encoder={best:.3f} baseline={adapter_score:.3f} rgb={initial['rgb_mae']:.3f}",
+            f"initial encoder={best:.3f} rgb={initial['rgb_mae']:.3f}",
             flush=True,
         )
     for epoch in range(start, args.epochs):
-        train = train_epoch(
-            model, ema, baseline, oracle, loaders["train"], optimizer, scaler, device, args
+        train = train_epoch(model, ema, oracle, loaders["train"], optimizer, scaler, device, args)
+        validation, shuffled = evaluate(
+            ema, loaders["val"], device, train_mean, args.seed + epoch + 1
         )
-        validation, adapter_validation, shuffled = evaluate(
-            ema, baseline, loaders["val"], device, train_mean, args.seed + epoch + 1
-        )
-        hard, _ = evaluate(ema, baseline, loaders["val"], device, train_mean, hard=True)
-        current = encoder_score(validation, shuffled, adapter_validation)
+        hard = evaluate(ema, loaders["val"], device, train_mean, hard=True)
+        current = encoder_score(validation, shuffled)
         improved = current > best + 1e-5
-        strict_improvement = strictly_beats_adapter(
-            validation, adapter_validation, current, adapter_score
-        )
         stale = 0 if improved else stale + 1
         scheduler.step(current)
         record = {
             "epoch": epoch,
             "score": current,
-            "beats_baseline": current > adapter_score,
             "train": train,
             "validation": validation,
             "validation_hard": hard,
-            "adapter_validation": adapter_validation,
             "shuffled": shuffled,
             "lr": optimizer.param_groups[0]["lr"],
         }
@@ -505,28 +421,17 @@ def main() -> None:
             "best_score": max(best, current),
             "stale": stale,
             "record": record,
-            "adapter_score": adapter_score,
-            "adapter": args.adapter,
             "oracle_renderer": args.oracle_renderer,
             "oracle_epoch": oracle_payload.get("epoch"),
             "latent_bank_manifest": manifest,
+            "architecture": "independent_direct_color_v1",
         }
         torch.save(payload, output / "last.pt")
         if improved:
             best = current
             torch.save(payload, output / "best.pt")
-        if strict_improvement:
-            previous = -math.inf
-            strict_path = output / "best_beating_adapter.pt"
-            if strict_path.exists():
-                previous = torch.load(strict_path, map_location="cpu", weights_only=False).get(
-                    "best_score", previous
-                )
-            if current > previous:
-                torch.save(payload, strict_path)
         save_panel(
             ema,
-            baseline,
             oracle,
             datasets["val"],
             device,
@@ -535,9 +440,9 @@ def main() -> None:
         )
         print(
             f"epoch={epoch:03d} loss={train['loss']:.3f} score={current:.3f} "
-            f"adapter={adapter_score:.3f} rgb={validation['rgb_mae']:.3f} "
+            f"rgb={validation['rgb_mae']:.3f} "
             f"chroma={validation['chroma_mae']:.3f} palette={validation['palette_pearson']:.3f} "
-            f"alpha={train['alpha']:.3f}",
+            f"var={train['representation_variance']:.3f}",
             flush=True,
         )
         if stale >= args.patience:
@@ -545,19 +450,16 @@ def main() -> None:
     selected = torch.load(output / "best.pt", map_location="cpu", weights_only=False)
     ema.load_state_dict(selected["ema"])
     ema.to(device)
-    test, adapter_test, shuffled = evaluate(
-        ema, baseline, loaders["test"], device, train_mean, args.seed + 999
-    )
+    test, shuffled = evaluate(ema, loaders["test"], device, train_mean, args.seed + 999)
     report = {
         "checkpoint_epoch": selected["epoch"],
         "color_encoder": test,
-        "frozen_baseline": adapter_test,
         "shuffled": shuffled,
-        "validation_adapter_score": adapter_score,
         "validation_selected_score": selected["best_score"],
         "test_images": len(datasets["test"]),
         "untouched_full_test": not args.smoke,
         "inference_inputs": ["preprocessed_eeg"],
+        "architecture": "independent_direct_color_v1",
     }
     (output / "test_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report, indent=2))
