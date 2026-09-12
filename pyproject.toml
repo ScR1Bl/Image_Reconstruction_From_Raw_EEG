@@ -25,6 +25,7 @@ visual-teachers = [
   "opencv-python>=4.9",
 ]
 dev = ["pytest>=8", "ruff>=0.12"]
+training = ["lightning==2.6.6", "torchmetrics==1.3.2"]
 
 [project.scripts]
 eeg-build-index = "eeg_mae.data.build_dataset_index:main"
@@ -36,6 +37,9 @@ eeg-train-edges = "eeg_mae.training.train_edge_encoder:main"
 eeg-train-hierarchical = "eeg_mae.training.train_hierarchical_semantic_encoder:main"
 eeg-build-fusion-conditions = "eeg_mae.data.build_fusion_condition_bank:main"
 eeg-train-fusion-prior = "eeg_mae.training.train_fusion_prior:main"
+eeg-build-single-protocol = "eeg_mae.data.single_subject:main"
+eeg-train-geometry-probes = "eeg_mae.training.train_geometry_probes:main"
+eeg-train-single = "eeg_mae.lightning.train_single_subject:main"
 
 # The repository intentionally also contains large runtime directories such as
 # data/ and runs/. Never let setuptools' flat-layout discovery treat them as
@@ -47,6 +51,7 @@ packages = [
   "eeg_mae.evaluation",
   "eeg_mae.models",
   "eeg_mae.training",
+  "eeg_mae.lightning",
 ]
 
 [tool.pytest.ini_options]

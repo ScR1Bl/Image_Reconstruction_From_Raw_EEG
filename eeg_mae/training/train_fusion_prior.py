@@ -107,8 +107,14 @@ def symmetric_contrastive(prediction, target, temperature=0.08):
 
 def gradient_loss(prediction, target):
     return 0.5 * (
-        F.smooth_l1_loss(prediction[..., 1:, :], target[..., 1:, :])
-        + F.smooth_l1_loss(prediction[..., :, 1:], target[..., :, 1:])
+        F.smooth_l1_loss(
+            prediction[..., 1:, :] - prediction[..., :-1, :],
+            target[..., 1:, :] - target[..., :-1, :],
+        )
+        + F.smooth_l1_loss(
+            prediction[..., :, 1:] - prediction[..., :, :-1],
+            target[..., :, 1:] - target[..., :, :-1],
+        )
     )
 
 
