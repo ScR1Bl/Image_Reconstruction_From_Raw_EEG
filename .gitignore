@@ -23,6 +23,7 @@ venv/
 *.npy
 *.npz
 *.zip
+*.tar
 *.log
 
 # OS files
