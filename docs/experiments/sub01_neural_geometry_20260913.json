@@ -1,0 +1,148 @@
+{
+  "subject_id": 0,
+  "repeats": 4,
+  "end_ms": 400,
+  "protocol_sha256": "375519f696a51fdcce4333cff27a115ae2938c228e82baf9825e3b6aee3a5fdf",
+  "sequence_disjoint_verified": false,
+  "test_evaluated": false,
+  "semantic": "synclr",
+  "training_inputs": "three-fold held-out neural EEG predictions; no true image input",
+  "structural_inputs": "E: predicted mask16, C: predicted RGB pooled to 8x8; not full latent tokens",
+  "selection": "validation mask MSE; all confidence intervals exploratory",
+  "metrics": {
+    "S": {
+      "shape_mse": 0.14364804327487946,
+      "shape_iou": 0.49393120408058167,
+      "centroid_error": 0.0929625853896141,
+      "area_mae": 0.14567594230175018,
+      "axis_error_degrees": 27.919294357299805,
+      "axis_eligible_images": 2005,
+      "within_category_2afc": 0.6089906700593724,
+      "within_category_pairs": 1179,
+      "axis_is_directionless": true
+    },
+    "S_E": {
+      "shape_mse": 0.1426307111978531,
+      "shape_iou": 0.4957920014858246,
+      "centroid_error": 0.09262792021036148,
+      "area_mae": 0.14436906576156616,
+      "axis_error_degrees": 27.67524528503418,
+      "axis_eligible_images": 2005,
+      "within_category_2afc": 0.6183206106870229,
+      "within_category_pairs": 1179,
+      "axis_is_directionless": true
+    },
+    "S_C": {
+      "shape_mse": 0.14368250966072083,
+      "shape_iou": 0.49378255009651184,
+      "centroid_error": 0.09289781004190445,
+      "area_mae": 0.1456267386674881,
+      "axis_error_degrees": 27.960643768310547,
+      "axis_eligible_images": 2005,
+      "within_category_2afc": 0.6132315521628499,
+      "within_category_pairs": 1179,
+      "axis_is_directionless": true
+    },
+    "S_E_C": {
+      "shape_mse": 0.14269815385341644,
+      "shape_iou": 0.4955327808856964,
+      "centroid_error": 0.09259743988513947,
+      "area_mae": 0.14435556530952454,
+      "axis_error_degrees": 27.748151779174805,
+      "axis_eligible_images": 2005,
+      "within_category_2afc": 0.6195928753180662,
+      "within_category_pairs": 1179,
+      "axis_is_directionless": true
+    },
+    "S_E_C_swapped_within_category": {
+      "shape_mse": 0.14459428191184998,
+      "shape_iou": 0.48817744851112366,
+      "centroid_error": 0.09464959055185318,
+      "area_mae": 0.14552609622478485,
+      "axis_error_degrees": 29.351299285888672,
+      "axis_eligible_images": 2005,
+      "within_category_2afc": 0.5593723494486853,
+      "within_category_pairs": 1179,
+      "axis_is_directionless": true
+    },
+    "S_noise": {
+      "shape_mse": 0.14509332180023193,
+      "shape_iou": 0.4911371171474457,
+      "centroid_error": 0.09342203289270401,
+      "area_mae": 0.14683584868907928,
+      "axis_error_degrees": 28.37238121032715,
+      "axis_eligible_images": 2005,
+      "within_category_2afc": 0.6106870229007634,
+      "within_category_pairs": 1179,
+      "axis_is_directionless": true
+    },
+    "E_direct": {
+      "shape_mse": 0.15957553684711456,
+      "shape_iou": 0.5059876441955566,
+      "centroid_error": 0.09607727825641632,
+      "area_mae": 0.16083812713623047,
+      "axis_error_degrees": 31.19059944152832,
+      "axis_eligible_images": 2005,
+      "within_category_2afc": 0.6297709923664122,
+      "within_category_pairs": 1179,
+      "axis_is_directionless": true
+    }
+  },
+  "alpha": {
+    "S": 10000,
+    "S_E": 10000,
+    "S_C": 10000,
+    "S_E_C": 10000,
+    "S_noise": 10000
+  },
+  "incremental_geometry": {
+    "S_E": {
+      "gain": 0.009329940627650551,
+      "ci95": [
+        0.0008481764206955047,
+        0.017387616624257845
+      ],
+      "unit": "category",
+      "split": "validation; exploratory, not final confirmation"
+    },
+    "S_C": {
+      "gain": 0.004240882103477523,
+      "ci95": [
+        -0.001272264631043257,
+        0.009754028837998304
+      ],
+      "unit": "category",
+      "split": "validation; exploratory, not final confirmation"
+    },
+    "S_E_C": {
+      "gain": 0.010602205258693808,
+      "ci95": [
+        0.0021204410517387615,
+        0.019083969465648856
+      ],
+      "unit": "category",
+      "split": "validation; exploratory, not final confirmation"
+    },
+    "S_noise": {
+      "gain": 0.0016963528413910093,
+      "ci95": [
+        -0.00720949957591179,
+        0.010602205258693808
+      ],
+      "unit": "category",
+      "split": "validation; exploratory, not final confirmation"
+    }
+  },
+  "benefit_over_within_category_swapped_structure": {
+    "gain": 0.06022052586938083,
+    "ci95": [
+      0.047063189143341816,
+      0.0742260390161153
+    ],
+    "unit": "category",
+    "split": "validation; exploratory, not final confirmation"
+  },
+  "five_point_geometry_gate_met": false,
+  "diffusion_training_started": false,
+  "next_step": "review geometry, timing metadata and artifacts before any diffusion training"
+}

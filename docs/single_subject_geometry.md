@@ -1,7 +1,8 @@
 # Geometria obrazu z EEG jednej osoby: implementacja i eksperymenty
 
-Stan: 12 września 2026. Branch `research/eeg-single-subject-geometry`; `main` bez zmian.
-To działający etap diagnostyczny i kolejka treningów, a nie ukończona rekonstrukcja EEG → PixArt.
+Stan: 13 września 2026. Branch `research/eeg-single-subject-geometry`; `main` bez zmian.
+Kolejka diagnostyczna zakończyła się bez błędów o 01:44 czasu polskiego.
+To zakończony etap diagnostyczny, a nie ukończona rekonstrukcja EEG → PixArt.
 Pierwotny [plan badawczy](experiments/plan_geometry_v2.md) pozostaje archiwum założeń.
 Zachowano też [pełny przegląd commitu SSSHANKS](experiments/REVIEW_SSSHANKS.md)
 i [wcześniejszą analizę struktur, nauczycieli i publikacji](experiments/ANALIZA_EEG_STRUKTURA_DINO_CLIP.md).
@@ -16,12 +17,57 @@ To dokumenty sprzed implementacji; bieżące wyniki i naprawy opisuje niniejszy 
   loaderów i starych wrapperów koloru/krawędzi. Nowe treningi korzystają z obecnych,
   niezależnych modeli projektu.
 - Zakończono ridge dla DINO, CLIP-B/32, SynCLR i maski, w oknach 200/400/800 ms.
-- Zakończono osobne treningi neuronowe DINO, CLIP-B/32, SynCLR i krawędzi, 400 ms.
+- Zakończono osobne treningi neuronowe DINO, CLIP-B/32, SynCLR, krawędzi i koloru, 400 ms.
 - Zakończono kontrolę dodatkowej geometrii z trzykrotnym cross-fittingiem ridge.
-- Uruchomiono kolejkę trzech foldów najlepszego modelu semantycznego, koloru,
+- Zakończono kolejkę trzech foldów najlepszego modelu semantycznego, koloru,
   foldów krawędzi/koloru i końcowych kontroli S / S+E / S+C / S+E+C.
   Faktyczny, aktualizowany stan: `runs/single_subject_geometry/sub-01/pipeline_status.json`.
-  Ten dokument opisuje start kolejki; nie oznacza, że jej późniejsze etapy się zakończyły.
+  Stan kolejki: `complete`, bez zgłoszonych błędów; wszystkie zaplanowane etapy mają raporty.
+
+## Wynik zakończonych kontroli neuronowych
+
+Walidacja sub-01, cztery prezentacje, 0–400 ms, te same 1179 par kategorii.
+Mały model liniowy przewiduje maskę z trzykrotnie cross-fitowanych przewidywań
+EEG. S oznacza SynCLR, E maskę16, C przewidywany RGB zmniejszony do 8×8.
+
+| Wejście do modelu maski | 2AFC geometrii | Zysk nad S | Eksploracyjny przedział 95% zysku |
+|---|---:|---:|---:|
+| S | 60,90% | — | — |
+| S+E | 61,83% | +0,93 pp | +0,08 do +1,74 pp |
+| S+C | 61,32% | +0,42 pp | −0,13 do +0,98 pp |
+| S+E+C | 61,96% | +1,06 pp | +0,21 do +1,91 pp |
+| S+losowe cechy | 61,07% | +0,17 pp | −0,72 do +1,06 pp |
+
+Próg +5 pp nie został osiągnięty. Krawędzie dostarczają małą dodatkową informację
+w tej kontroli; osobna korzyść koloru dla geometrii pozostaje nieprzekonująca.
+To nie dowodzi bezużyteczności koloru dla palety ani redundancji pełnych tokenów:
+kontrola korzysta z dekodowanych map, a celem jest maska. Przedziały są walidacyjne,
+po wyborze hiperparametrów; nie uwzględniają wielokrotnego testowania ani zmienności
+ziaren/osób i nie są końcowym potwierdzeniem badawczym.
+
+Zamiana E/C między dwoma obrazami tej samej kategorii obniża S+E+C do 55,94%.
+Poprawne przypisanie struktury pomaga więc temu modelowi, ale spadku po celowym
+podaniu błędnych warunków (+6,02 pp względem kontroli) nie wolno przedstawiać jako
+zysku nad samą semantyką (+1,06 pp).
+
+Bezpośrednia maska encodera krawędzi ma nadal 62,98% i przewyższa powyższe mapowanie
+S+E+C w 2AFC. Mapowanie S+E+C ma za to niższy MSE: 0,1427 vs 0,1596. Dobierano je
+według MSE; obecne połączenie nie jest najlepsze we wszystkich kryteriach.
+Wszystkie wybrane alfy ridge znalazły się na górnej granicy sprawdzanej siatki
+(10000). Warto zbadać większą regularyzację na walidacji, lecz nie zmieniać po fakcie
+znaczenia tego zakończonego eksperymentu.
+
+Gałąź koloru: rozróżnianie chromy dwóch zdjęć tej samej kategorii wynosi 54,99%
+przy czterech prezentacjach, 53,69% przy dwóch i 52,66% przy jednej (losowo 50%).
+To osobna miara, z 1654 parami; nie porównujemy jej bezpośrednio z 2AFC maski.
+Odświeżony `diagnostics/validation_pairs.png` zawiera piąty rząd z przewidywanym
+kolorem. Pokazuje bardzo rozmyte układy barw, nie wierne rekonstrukcje obiektów.
+
+Wniosek: nie uruchamiamy na podstawie tego wyniku kosztownego treningu dyfuzji.
+Najpierw sprawdzić regularyzację mapowania, informację w pełnych tokenach i cele
+orientacji/części oraz audyt czasu. Nie ma jeszcze dowodu odzyskania układu skrzydeł.
+Test pozostaje zamknięty. [Pełny raport kontroli](experiments/sub01_neural_geometry_20260913.json)
+zapisuje wszystkie warianty, przedziały i status progu.
 
 ## Protokół i znaczenie wyników
 
