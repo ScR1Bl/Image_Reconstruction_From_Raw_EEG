@@ -18,9 +18,9 @@ $pixart = "data/pretrained/models--PixArt-alpha--PixArt-XL-2-512x512/snapshots/5
 if (-not (Test-Path $pixart)) { $pixart = "PixArt-alpha/PixArt-XL-2-512x512" }
 ```
 
-Indeks i cache są już obecne lokalnie. Dane źródłowe oraz surowe archiwum
-`data/raw/18470912.zip` zachowano. Bieżące trenery czytają `preprocessed/`,
-nie surowe napięcia z archiwum.
+Indeks, cache, obrazy i oficjalnie przetworzone EEG są już obecne lokalnie.
+Surowe archiwum `data/raw/18470912.zip` usunięto na wyraźne życzenie użytkownika.
+Bieżące trenery czytają `preprocessed/`, nie surowe napięcia z tego archiwum.
 
 ## 2. Cele obrazowe dla EEG→CLIP i PixArt
 

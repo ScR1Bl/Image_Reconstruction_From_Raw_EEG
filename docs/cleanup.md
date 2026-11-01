@@ -17,16 +17,20 @@ Trwale usunięto 819 plików artefaktów, 34 990 073 306 bajtów (~35 GB).
 Szczegółowy wykaz usuniętych plików pozostaje poza projektem w
 `D:/GSN_EEG_archive_20261101/deleted-artifacts.csv`.
 
+Po osobnym potwierdzeniu użytkownika usunięto również jedyną lokalną kopię
+surowego EEG `data/raw/18470912.zip`: 117 109 620 289 bajtów (~117 GB).
+Sprawdzono, że wszystkie 10 archiwów oficjalnie przetworzonego EEG pozostało.
+Łącznie usunięto 820 plików, 152 099 693 595 bajtów (~152 GB).
+
 ## Zachowane
 
-- Źródłowy dataset, obrazy, preprocessing autorów i cache EEG.
+- Oficjalnie przetworzone EEG, obrazy, kod preprocessingu autorów i cache EEG.
 - Banki DINO/koloru/krawędzi i PiDiNet potrzebne zachowanym ścieżkom.
 - Oryginalne bundle koloru i krawędzi z ich katalogami `components`.
 - Wybrany EEG→CLIP `clip2b-warm-lr2` jako `runs/eeg_encoder/best.ckpt`.
 - Wybrany adapter `faza1-t8c` jako `runs/dit_adapter/best.ckpt`.
 - Historyczne checkpointy inicjalizacyjne i konfiguracje tych dwóch przebiegów.
 - Cache PixArt w `data/pretrained`, stały warunek tekstowy w `data/derived/pixart_null.pt`.
-- Surowe EEG `18470912.zip` przeniesione do `data/raw/`; to dane źródłowe, nie zbędny wynik.
 
 ## Odzyskanie poprzedniego kodu
 
