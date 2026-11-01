@@ -1,8 +1,8 @@
 # Porządki — 1 listopada 2026
 
-Uporządkowana wersja znajduje się na lokalnym `main`. Poprzedni `main`
+Uporządkowana wersja znajduje się na `main`. Poprzedni `main`
 (`677ee8d`) zachowano jako `old_main`. Bazą porządków jest `origin/s_dev`
-na `89142c2`, z poprawkami odtwarzalności. Zdalne gałęzie nie były zmieniane.
+na `89142c2`, z poprawkami odtwarzalności. Gałąź autora `s_dev` pozostaje bez zmian.
 Gałąź `cleanup/ssshanks-reproduction` zachowuje stan przed usunięciem testów.
 
 ## Usunięte
