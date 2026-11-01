@@ -1,7 +1,9 @@
 # Porządki — 1 listopada 2026
 
-Gałąź robocza: `cleanup/ssshanks-reproduction`. Bazą jest `origin/s_dev` na
-`89142c2`, z poprawkami odtwarzalności. `main` i gałęzie autora nie były zmieniane.
+Uporządkowana wersja znajduje się na lokalnym `main`. Poprzedni `main`
+(`677ee8d`) zachowano jako `old_main`. Bazą porządków jest `origin/s_dev`
+na `89142c2`, z poprawkami odtwarzalności. Zdalne gałęzie nie były zmieniane.
+Gałąź `cleanup/ssshanks-reproduction` zachowuje stan przed usunięciem testów.
 
 ## Usunięte
 
@@ -50,10 +52,19 @@ wybrane przez użytkownika. Nie obiecuje się ich odzyskania z archiwum kodu.
 
 ## Weryfikacja i pozostałości
 
-Po zmianach: 35 testów przeszło; 62 pliki Python przechodzą kontrolę formatowania.
+Przed usunięciem testów: 35 testów przeszło, a 62 pliki Python przeszły kontrolę formatowania.
 Zachowane modele koloru i krawędzi przetworzyły prawdziwe EEG. Pełny test techniczny
 EEG→CLIP→PixArt→VAE zapisał PNG 512×512 przy dwóch krokach generowania. Nie jest
 to pomiar jakości ani ponowne przeprowadzenie pełnych treningów.
+
+Następnie, na wyraźne życzenie użytkownika, z nowego `main` usunięto katalog
+źródeł testów, workflow testowy i konfigurację pytest. Testy można odzyskać
+z gałęzi `cleanup/ssshanks-reproduction`; nie są potrzebne do inferencji
+ani treningu. Pozostawiono kontrolę składni i formatowania kodu.
+Pozostały cache testów przeniesiono poza projekt do
+`D:/GSN_EEG_archive_20261101/removed-tests-cache` i `removed-pytest-cache`,
+ponieważ automatyczna kontrola zablokowała jego kasowanie. W katalogu projektu
+nie ma już `tests/` ani `.pytest_cache/`.
 
 Pusty katalog `runs/dit_ten_subjects/comparison_generation` był zablokowany przez
 inny proces; nie zawiera wyników. Automatyczna kontrola narzędzi odrzuciła usunięcie

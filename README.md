@@ -74,7 +74,6 @@ Obsługa dowolnego podzbioru osób w nowym CLI dotyczy ścieżki semantycznej.
 | `eeg_mae/training` | Oryginalne trenery DINO, koloru i krawędzi oraz ich komponentów |
 | `eeg_mae/lightning` | Trening EEG→CLIP i adaptera PixArt |
 | `eeg_mae/evaluation` | Benchmark 200-way, generowanie z EEG i ocena wygenerowanych obrazów |
-| `tests` | Testy zachowanych modeli, metryk i podstawowej odtwarzalności |
 | `data` | Dane źródłowe, potrzebne banki i cache modeli; poza Git |
 | `runs` | Wybrane wagi; własne wyniki generowania; poza Git |
 | `artifacts` | Nowe treningi Lightning; poza Git |
@@ -86,9 +85,8 @@ Zakres porządków i odzyskanie starego kodu: [docs/cleanup.md](docs/cleanup.md)
 ## Kontrola zmian
 
 ```powershell
-python -m pytest -q
-ruff format --check eeg_mae tests
+python -m compileall -q eeg_mae
+ruff format --check eeg_mae
 ```
 
-Testy są kontrolą poprawności kodu, a nie nowymi eksperymentami badawczymi.
 Dane, checkpointy i cache pozostają poza repozytorium Git.

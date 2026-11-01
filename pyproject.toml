@@ -18,7 +18,7 @@ visual-teachers = [
   "scipy>=1.12",
   "opencv-python>=4.9",
 ]
-dev = ["pytest>=8", "ruff>=0.12"]
+dev = ["ruff>=0.12"]
 dit = ["diffusers>=0.34", "accelerate>=1.0"]
 
 [project.scripts]
@@ -42,9 +42,6 @@ packages = [
   "eeg_mae.models",
   "eeg_mae.training",
 ]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100

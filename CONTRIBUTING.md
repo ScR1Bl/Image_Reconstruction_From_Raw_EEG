@@ -5,4 +5,4 @@
 - Nowe treningi uruchamiaj pod nową nazwą; rozróżniaj inicjalizację wag od pełnego wznowienia.
 - Nie używaj obrazu docelowego do budowania warunków generowania z EEG.
 - Dokumentuj komendę, podział danych i checkpoint użyty do wyniku.
-- Przed oddaniem zmian: `python -m pytest -q` i `ruff format --check eeg_mae tests`.
+- Przed oddaniem zmian: `python -m compileall -q eeg_mae` i `ruff format --check eeg_mae`.
