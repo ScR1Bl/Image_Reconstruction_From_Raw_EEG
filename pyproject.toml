@@ -27,6 +27,7 @@ visual-teachers = [
 dev = ["pytest>=8", "ruff>=0.12"]
 training = ["lightning==2.6.6", "torchmetrics==1.3.2"]
 diagnostics = ["matplotlib>=3.8"]
+category-text = ["bitsandbytes==0.50.2", "sentencepiece==0.2.2", "accelerate>=1.0"]
 
 [project.scripts]
 eeg-build-index = "eeg_mae.data.build_dataset_index:main"
@@ -41,6 +42,7 @@ eeg-train-fusion-prior = "eeg_mae.training.train_fusion_prior:main"
 eeg-build-single-protocol = "eeg_mae.data.single_subject:main"
 eeg-train-geometry-probes = "eeg_mae.training.train_geometry_probes:main"
 eeg-train-single = "eeg_mae.lightning.train_single_subject:main"
+eeg-reconstruct = "eeg_mae.evaluation.reconstruct_eeg:main"
 
 # The repository intentionally also contains large runtime directories such as
 # data/ and runs/. Never let setuptools' flat-layout discovery treat them as

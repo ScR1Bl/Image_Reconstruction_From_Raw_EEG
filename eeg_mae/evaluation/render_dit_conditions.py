@@ -81,6 +81,17 @@ def main():
                 steps=args.steps,
                 guidance=args.guidance,
                 seed=args.seed + i,
+                **(
+                    {
+                        "prompt_embeds": bundle["text_conditions"][name]["embeds"][
+                            i : i + 1
+                        ].cuda(),
+                        "prompt_mask": bundle["text_conditions"][name]["mask"][i : i + 1].cuda(),
+                        "lambda_override": bundle["text_conditions"][name].get("lambda_override"),
+                    }
+                    if name in bundle.get("text_conditions", {})
+                    else {}
+                ),
             )
             module.decode_and_grid(latents).save(destination)
             print(

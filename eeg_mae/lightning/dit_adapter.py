@@ -116,18 +116,21 @@ class DiTAdapterLightning(L.LightningModule):
         gradient_checkpointing: bool = False,  # konflikt z custom attn processorem
         lr: float = 1e-4,
         weight_decay: float = 1e-2,
+        revision: str = "50f702106901db6d0f8b67eb88e814c56ded2692",
     ) -> None:
         super().__init__()
         self.save_hyperparameters()
         from diffusers import DDPMScheduler, PixArtTransformer2DModel
 
         self.transformer = PixArtTransformer2DModel.from_pretrained(
-            repo, subfolder="transformer", torch_dtype=torch.bfloat16
+            repo, subfolder="transformer", revision=revision, torch_dtype=torch.bfloat16
         )
         self.transformer.requires_grad_(False)
         if gradient_checkpointing:
             self.transformer.enable_gradient_checkpointing()
-        self.noise_scheduler = DDPMScheduler.from_pretrained(repo, subfolder="scheduler")
+        self.noise_scheduler = DDPMScheduler.from_pretrained(
+            repo, subfolder="scheduler", revision=revision
+        )
 
         hidden = self.transformer.config.num_attention_heads * (
             self.transformer.config.attention_head_dim
@@ -182,15 +185,30 @@ class DiTAdapterLightning(L.LightningModule):
         return [float(p.ip_scale.detach()) for p in self.processors]
 
     def denoise_forward(
-        self, latents: torch.Tensor, timesteps: torch.Tensor, clip_embeds: torch.Tensor | None
+        self,
+        latents: torch.Tensor,
+        timesteps: torch.Tensor,
+        clip_embeds: torch.Tensor | None,
+        prompt_embeds: torch.Tensor | None = None,
+        prompt_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         batch = len(latents)
         if clip_embeds is not None:
             self.holder.tokens = self.projection(clip_embeds.float())
         else:
             self.holder.tokens = None
-        text = self.null_text.to(self.device, torch.bfloat16).expand(batch, -1, -1)
-        mask = self.null_mask.to(self.device).expand(batch, -1)
+        if (prompt_embeds is None) != (prompt_mask is None):
+            raise ValueError("provide both prompt embeddings and mask")
+        text = (
+            (self.null_text if prompt_embeds is None else prompt_embeds)
+            .to(self.device, torch.bfloat16)
+            .expand(batch, -1, -1)
+        )
+        mask = (
+            (self.null_mask if prompt_mask is None else prompt_mask)
+            .to(self.device)
+            .expand(batch, -1)
+        )
         out = self.transformer(
             latents.to(torch.bfloat16),
             encoder_hidden_states=text,
@@ -246,7 +264,10 @@ class DiTAdapterLightning(L.LightningModule):
 
             self._vae_model = (
                 AutoencoderKL.from_pretrained(
-                    self.hparams.repo, subfolder="vae", torch_dtype=torch.bfloat16
+                    self.hparams.repo,
+                    subfolder="vae",
+                    revision=self.hparams.revision,
+                    torch_dtype=torch.bfloat16,
                 )
                 .to(self.device)
                 .eval()
@@ -274,6 +295,8 @@ class DiTAdapterLightning(L.LightningModule):
         guidance: float = 4.5,
         seed: int = 20260714,
         lambda_override: float | None = None,
+        prompt_embeds: torch.Tensor | None = None,
+        prompt_mask: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """DPM-Solver sampling with image-CFG (uncond = zeroed CLIP embedding).
 
@@ -282,7 +305,7 @@ class DiTAdapterLightning(L.LightningModule):
         from diffusers import DPMSolverMultistepScheduler
 
         scheduler = DPMSolverMultistepScheduler.from_pretrained(
-            self.hparams.repo, subfolder="scheduler"
+            self.hparams.repo, subfolder="scheduler", revision=self.hparams.revision
         )
         scheduler.set_timesteps(steps, device=self.device)
         generator = torch.Generator(self.device.type).manual_seed(seed)
@@ -295,7 +318,7 @@ class DiTAdapterLightning(L.LightningModule):
         for t in scheduler.timesteps:
             model_in = scheduler.scale_model_input(latents, t)
             tt = t.expand(len(latents))
-            eps_cond = self.denoise_forward(model_in, tt, clip_embeds)
+            eps_cond = self.denoise_forward(model_in, tt, clip_embeds, prompt_embeds, prompt_mask)
             eps_uncond = self.denoise_forward(model_in, tt, uncond)
             eps = eps_uncond + guidance * (eps_cond - eps_uncond)
             latents = scheduler.step(eps.float(), t, latents).prev_sample

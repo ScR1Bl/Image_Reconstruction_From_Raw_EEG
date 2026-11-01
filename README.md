@@ -1,4 +1,4 @@
-# EEG Color and Edge Encoders
+# EEG Decoding and Image Generation
 
 PyTorch pipelines that recover complementary visual conditions from
 [THINGS-EEG2](https://osf.io/3jk45/) EEG recordings:
@@ -30,6 +30,19 @@ adds a frozen 6/2/2 image split, Lightning training of one participant, semantic
 teacher comparisons and out-of-fold tests of extra geometry from edge/color
 predictions. Its checkpoints live under `runs/single_subject_geometry/` and are
 not promoted production bundles. Install `.[training]` for these entry points.
+
+The [ten-subject PixArt integration](docs/dit_ten_subjects.md) uses the supplied
+SSSHANKS adapter and tests semantic/edge/color conditions through a learned CLIP
+bridge. It explicitly fuses ten people and is separate from the single-subject
+experiment. It needs `.[training,visual-teachers]` and the external checkpoints.
+
+The [category-assisted generation pipeline](docs/category_generation.md) adds a
+Lightning category classifier, training-only image references, and explicit
+predicted-category text conditioning. It runs from preprocessed ten-person EEG
+with `python -m eeg_mae.evaluation.reconstruct_eeg`. Category accuracy is still
+limited (17.84% Top-1 / 41.05% Top-5 over 1654 known categories); generated object
+pose is not established as recovered EEG geometry. See the report before using
+the visualizations as research results.
 
 ## Installation
 
