@@ -5,43 +5,29 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "eeg-mae"
 version = "0.1.0"
-description = "Subject-adaptive semantic and spatial-edge EEG encoders for THINGS-EEG2"
+description = "Reproducible THINGS-EEG2 semantic, color, edge and PixArt pipelines"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = ["numpy>=1.26", "Pillow>=10", "torch>=2.2"]
+dependencies = ["numpy>=1.26", "Pillow>=10", "torch>=2.2", "lightning==2.6.6", "torchmetrics==1.3.2", "PyYAML>=6"]
 
 [project.optional-dependencies]
 visual-teachers = [
-  "accelerate>=1.0",
-  "diffusers>=0.34",
-  "huggingface-hub>=0.27",
   "Pillow>=10",
   "transformers>=5.0",
   "torchvision>=0.20",
-  "einops>=0.8",
-  "kornia>=0.8",
-  "timm>=1.0",
   "scipy>=1.12",
   "opencv-python>=4.9",
 ]
 dev = ["pytest>=8", "ruff>=0.12"]
-training = ["lightning==2.6.6", "torchmetrics==1.3.2"]
-diagnostics = ["matplotlib>=3.8"]
-category-text = ["bitsandbytes==0.50.2", "sentencepiece==0.2.2", "accelerate>=1.0"]
+dit = ["diffusers>=0.34", "accelerate>=1.0"]
 
 [project.scripts]
 eeg-build-index = "eeg_mae.data.build_dataset_index:main"
 eeg-build-cache = "eeg_mae.data.build_eeg_cache:main"
-eeg-build-hierarchical-targets = "eeg_mae.data.build_hierarchical_visual_targets:main"
 eeg-train-color = "eeg_mae.training.train_color_encoder:main"
-eeg-train-color-hybrid = "eeg_mae.training.train_hybrid_color_encoder:main"
 eeg-train-edges = "eeg_mae.training.train_edge_encoder:main"
-eeg-train-hierarchical = "eeg_mae.training.train_hierarchical_semantic_encoder:main"
-eeg-build-fusion-conditions = "eeg_mae.data.build_fusion_condition_bank:main"
-eeg-train-fusion-prior = "eeg_mae.training.train_fusion_prior:main"
-eeg-build-single-protocol = "eeg_mae.data.single_subject:main"
-eeg-train-geometry-probes = "eeg_mae.training.train_geometry_probes:main"
-eeg-train-single = "eeg_mae.lightning.train_single_subject:main"
+eeg-train-semantic = "eeg_mae.lightning.train_eeg_encoder:main"
+eeg-train-dit = "eeg_mae.lightning.train_dit_adapter:main"
 eeg-reconstruct = "eeg_mae.evaluation.reconstruct_eeg:main"
 
 # The repository intentionally also contains large runtime directories such as
@@ -52,9 +38,9 @@ packages = [
   "eeg_mae",
   "eeg_mae.data",
   "eeg_mae.evaluation",
+  "eeg_mae.lightning",
   "eeg_mae.models",
   "eeg_mae.training",
-  "eeg_mae.lightning",
 ]
 
 [tool.pytest.ini_options]

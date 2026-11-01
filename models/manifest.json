@@ -3,24 +3,109 @@
   "bundles": {
     "eeg_color_encoder": {
       "best_epoch": 22,
-      "archive": {"name": "eeg_color_encoder.zip", "bytes": 226353559, "sha256": "e65723ac220408ff6b2299318d9f77491aaf862fb3a812fae24d52c7349447b4"},
+      "archive": {
+        "name": "eeg_color_encoder.zip",
+        "bytes": 226353559,
+        "sha256": "e65723ac220408ff6b2299318d9f77491aaf862fb3a812fae24d52c7349447b4"
+      },
       "files": {
-        "best.pt": {"bytes": 64077526, "sha256": "412ac9f711af9743b618463fcb5f9c817527d9f79916a4677734ed15206cf0ca"},
-        "components/adapter.pt": {"bytes": 64837855, "sha256": "3c3ed237b4a15ce8cf39e4d183505bb09bba2338fa32d2d0fc9c05fcb2d4a477"},
-        "components/color_decoder.pt": {"bytes": 4665539, "sha256": "446d0768c8d4b5e0427f4180e6d8af22ec9d5dad9563f7ef5157c83cfaf039a3"},
-        "components/color_oracle.pt": {"bytes": 86930279, "sha256": "46cf38732ea3a9c4c5e811322e48fa7e853533bb2687a8ff348da18f78e461a5"},
-        "components/semantic_encoder.pt": {"bytes": 24915031, "sha256": "2675fc21fd8ed2cc1a05e43fe31f1ddcdd0ffd26400787dcbeb6c76add41e865"}
+        "best.pt": {
+          "bytes": 64077526,
+          "sha256": "412ac9f711af9743b618463fcb5f9c817527d9f79916a4677734ed15206cf0ca"
+        },
+        "components/adapter.pt": {
+          "bytes": 64837855,
+          "sha256": "3c3ed237b4a15ce8cf39e4d183505bb09bba2338fa32d2d0fc9c05fcb2d4a477"
+        },
+        "components/color_decoder.pt": {
+          "bytes": 4665539,
+          "sha256": "446d0768c8d4b5e0427f4180e6d8af22ec9d5dad9563f7ef5157c83cfaf039a3"
+        },
+        "components/color_oracle.pt": {
+          "bytes": 86930279,
+          "sha256": "46cf38732ea3a9c4c5e811322e48fa7e853533bb2687a8ff348da18f78e461a5"
+        },
+        "components/semantic_encoder.pt": {
+          "bytes": 24915031,
+          "sha256": "2675fc21fd8ed2cc1a05e43fe31f1ddcdd0ffd26400787dcbeb6c76add41e865"
+        }
       }
     },
     "eeg_edge_encoder": {
       "best_epoch": 15,
-      "archive": {"name": "eeg_edge_encoder.zip", "bytes": 148548008, "sha256": "372d89e1691022894ae12523e72b57fca166bfefbfe740f1ab5fde59528afae4"},
+      "archive": {
+        "name": "eeg_edge_encoder.zip",
+        "bytes": 148548008,
+        "sha256": "372d89e1691022894ae12523e72b57fca166bfefbfe740f1ab5fde59528afae4"
+      },
       "files": {
-        "best.pt": {"bytes": 65057835, "sha256": "f901a2fba23ced00e217249992a0bf1a44044e59aa74d2fc79089059757bcab9"},
-        "components/baseline.pt": {"bytes": 57425011, "sha256": "0b000040e6f74be03ba84c999f40ca9cff366538c7aba6a4d79cc5e7d3e8268e"},
-        "components/edge_decoder.pt": {"bytes": 12559485, "sha256": "50745082d99357d7847e82072681a5772ea8d97b229dff9f5918a38fdf96e67d"},
-        "components/semantic_encoder.pt": {"bytes": 24915031, "sha256": "2675fc21fd8ed2cc1a05e43fe31f1ddcdd0ffd26400787dcbeb6c76add41e865"}
+        "best.pt": {
+          "bytes": 65057835,
+          "sha256": "f901a2fba23ced00e217249992a0bf1a44044e59aa74d2fc79089059757bcab9"
+        },
+        "components/baseline.pt": {
+          "bytes": 57425011,
+          "sha256": "0b000040e6f74be03ba84c999f40ca9cff366538c7aba6a4d79cc5e7d3e8268e"
+        },
+        "components/edge_decoder.pt": {
+          "bytes": 12559485,
+          "sha256": "50745082d99357d7847e82072681a5772ea8d97b229dff9f5918a38fdf96e67d"
+        },
+        "components/semantic_encoder.pt": {
+          "bytes": 24915031,
+          "sha256": "2675fc21fd8ed2cc1a05e43fe31f1ddcdd0ffd26400787dcbeb6c76add41e865"
+        }
       }
     }
+  },
+  "baseline_source": {
+    "branch": "origin/s_dev",
+    "commit": "89142c24e19b2da01b8aa3f905dbc54a5945a597"
+  },
+  "semantic_generation_assets": {
+    "runs/eeg_encoder/best.ckpt": {
+      "source": "runs/colleague_artifacts_20260913/artifacts/eeg_encoder/clip2b-warm-lr2/checkpoints/best.ckpt",
+      "bytes": 163239975,
+      "sha256": "a5e503612b73b3f51d04013f2d9bceb005ced179343b5f8b5d8d55c079619259"
+    },
+    "runs/eeg_encoder/original_config.yaml": {
+      "source": "runs/colleague_artifacts_20260913/artifacts/eeg_encoder/clip2b-warm-lr2/config.yaml",
+      "bytes": 878,
+      "sha256": "64184c3c374e54923618d577efe0f672c8016b386f7e2fa6975ebcfb705f07f4"
+    },
+    "runs/eeg_encoder/original_metrics.json": {
+      "source": "runs/colleague_artifacts_20260913/artifacts/eeg_encoder/clip2b-warm-lr2/metrics/ncurve.json",
+      "bytes": 4966,
+      "sha256": "0a75cf676c60e656d9fe7270d49a473c599471feba0066f7e5acca7f1be0a157"
+    },
+    "runs/eeg_encoder/initialization.ckpt": {
+      "source": "runs/colleague_artifacts_20260913/artifacts/eeg_encoder/baseline-lightning/checkpoints/semantic_encoder.ckpt",
+      "bytes": 24916051,
+      "sha256": "53d0fe16f2d302a8af4ed7c8ebc078a128a3aa7e6129b583bd89a86266b78e0b"
+    },
+    "runs/dit_adapter/best.ckpt": {
+      "source": "runs/colleague_artifacts_20260913/artifacts/dit_adapter/faza1-t8c/checkpoints/best.ckpt",
+      "bytes": 325934559,
+      "sha256": "726cbaa6dbd8df1e5db904ea9c52ed6bb3911fe4e05da69bcb8a99754b6c416e"
+    },
+    "runs/dit_adapter/original_config.yaml": {
+      "source": "runs/colleague_artifacts_20260913/artifacts/dit_adapter/faza1-t8c/config.yaml",
+      "bytes": 448,
+      "sha256": "72917215edca6678bb5fc6eaf91d3afd74fac529f245af72f1fbe29580d855dd"
+    },
+    "runs/dit_adapter/initialization.ckpt": {
+      "source": "runs/colleague_artifacts_20260913/artifacts/dit_adapter/faza1-t8-resume-source.ckpt",
+      "bytes": 1145224459,
+      "sha256": "675693c9381c25f8c022741705d052d673b0724c7af478b89774364954455740"
+    },
+    "data/derived/pixart_null.pt": {
+      "source": "runs/colleague_artifacts_20260913/artifacts/dit_adapter/t5_embeddings.pt",
+      "bytes": 6891947,
+      "sha256": "f0defe1eab13f075da49be15d1e409b84bad6aa5575029cdd81f824086901749"
+    }
+  },
+  "initialization_notes": {
+    "eeg_encoder": "DINO warm start for clip2b-warm-lr2; new scratch training does not require it",
+    "dit_adapter": "Historical faza1-t8-resume-source contains optimizer and frozen VAE state, but the historical final-stage script used its weights only. Selected best.ckpt has no optimizer state. Use --init-from to reproduce that initialization."
   }
 }

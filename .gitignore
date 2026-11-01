@@ -17,6 +17,7 @@ venv/
 # Local datasets and generated artifacts
 /data/
 /runs/
+/artifacts/
 *.pt
 *.pth
 *.ckpt

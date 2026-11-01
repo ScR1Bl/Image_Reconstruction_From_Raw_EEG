@@ -9,7 +9,6 @@ from .color_specialist import (
     EEGColorEncoderPipeline,
     load_eeg_color_encoder,
 )
-from .hybrid_color import EEGHybridColorEncoder, HybridColorOutput, load_hybrid_color_encoder
 
 EEGColorEncoder = EEGColorEncoderPipeline
 
@@ -23,11 +22,4 @@ def load_color_encoder(
     return load_eeg_color_encoder(root=root, device=device)
 
 
-__all__ = [
-    "ColorSpecialistOutput",
-    "EEGColorEncoder",
-    "EEGHybridColorEncoder",
-    "HybridColorOutput",
-    "load_color_encoder",
-    "load_hybrid_color_encoder",
-]
+__all__ = ["ColorSpecialistOutput", "EEGColorEncoder", "load_color_encoder"]

@@ -19,13 +19,15 @@ from torch.utils.data import DataLoader
 from ..data.build_pyramid_edge_targets import PYRAMID_KEYS
 from ..evaluation.official_200way_benchmark import cached_array
 from ..models.edge_specialist import EEGEdgeSpecialist
-from ..models.model_utils import variance_covariance_regularization
 from ..models.pyramid_edge import (
     PyramidEdgeOutput,
+    load_pyramid_edge_decoder,
     pyramid_edge_loss,
     pyramid_edge_sample_errors,
 )
-from ..models.task_adapter import cvar, shuffled_ranking_loss
+from ..models.semantic_edge import EEGDINOGridPredictor
+from ..models.semantic_encoder import load_semantic_encoder
+from ..models.task_adapter import cvar, improvement_loss, shuffled_ranking_loss
 from .train_color_oracle import update_ema
 from .train_edge_baseline import EEGPyramidDataset, concatenate, split_records
 from .train_edge_decoder import metrics as pyramid_metrics
@@ -34,6 +36,13 @@ from .train_edge_decoder import metrics as pyramid_metrics
 def arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Independent structure-specialized raw EEG encoder"
+    )
+    parser.add_argument("--baseline", default="runs/eeg_edge_encoder/components/baseline.pt")
+    parser.add_argument(
+        "--semantic-encoder", default="runs/eeg_edge_encoder/components/semantic_encoder.pt"
+    )
+    parser.add_argument(
+        "--pyramid-decoder", default="runs/eeg_edge_encoder/components/edge_decoder.pt"
     )
     parser.add_argument("--visual-bank", default="data/derived/visual_targets_dinov2s_192.pt")
     parser.add_argument("--target-bank", default="data/derived/pyramid_edge_targets_v1.pt")
@@ -48,6 +57,7 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--eval-batch-size", type=int, default=16)
     parser.add_argument("--lr", type=float, default=2e-4)
     parser.add_argument("--weight-decay", type=float, default=0.015)
+    parser.add_argument("--margin", type=float, default=0.018)
     parser.add_argument("--rank-margin", type=float, default=0.10)
     parser.add_argument("--ema-decay", type=float, default=0.998)
     parser.add_argument("--patience", type=int, default=10)
@@ -55,9 +65,29 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=20260812)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--resume", default=None)
-    parser.add_argument("--init-from", default=None, help="warm-start matching EEG encoder weights")
     parser.add_argument("--smoke", action="store_true")
     return parser.parse_args()
+
+
+class FrozenEdgeBaseline:
+    def __init__(
+        self, checkpoint: Path, semantic_path: str, decoder_path: str, device: torch.device
+    ) -> None:
+        payload = torch.load(checkpoint, map_location="cpu", weights_only=False)
+        encoder = load_semantic_encoder(semantic_path, device)
+        self.predictor = EEGDINOGridPredictor(encoder, **payload["model_config"]).to(device)
+        self.predictor.load_state_dict(payload["model"], strict=True)
+        self.decoder, self.decoder_payload = load_pyramid_edge_decoder(decoder_path, device)
+        self.payload = payload
+        for model in (self.predictor, self.decoder):
+            model.eval()
+            for parameter in model.parameters():
+                parameter.requires_grad_(False)
+
+    @torch.no_grad()
+    def __call__(self, eeg: torch.Tensor) -> PyramidEdgeOutput:
+        grid, _ = self.predictor.forward_ensemble(eeg)
+        return self.decoder(grid)
 
 
 def shuffled_target(target, order):
@@ -86,20 +116,36 @@ def diversity_loss(output: PyramidEdgeOutput, target) -> torch.Tensor:
     return sum(losses)
 
 
-def train_epoch(model, ema, loader, optimizer, scaler, device, args):
+def residual_energy(output: PyramidEdgeOutput, baseline: PyramidEdgeOutput) -> torch.Tensor:
+    return sum(
+        (getattr(output, field) - getattr(baseline, field)).square().mean()
+        for field in (
+            "shape_logits16",
+            "semantic_logits32",
+            "perceptual_logits64",
+            "crisp_logits64",
+        )
+    )
+
+
+def train_epoch(model, ema, baseline, loader, optimizer, scaler, device, args):
     model.train()
     totals = {}
     batches = 0
     for batch in loader:
         eeg = batch["eeg"].to(device, non_blocking=True)
         target = {key: batch[key].to(device, non_blocking=True) for key in PYRAMID_KEYS}
+        with torch.no_grad(), torch.autocast("cuda", torch.float16, enabled=device.type == "cuda"):
+            base = baseline(eeg)
+            base_error, _ = pyramid_edge_sample_errors(base, target)
         optimizer.zero_grad(set_to_none=True)
         with torch.autocast("cuda", torch.float16, enabled=device.type == "cuda"):
-            result = model(eeg)
+            result = model(eeg, base)
             output = result.pyramid
             pyramid, parts = pyramid_edge_loss(output, target)
             errors, sample_parts = pyramid_edge_sample_errors(output, target)
             task, hard = errors.mean(), cvar(errors, 0.25)
+            improve = improvement_loss(errors, base_error, args.margin)
             order = torch.roll(torch.arange(len(eeg), device=device), 1)
             wrong_errors, _ = pyramid_edge_sample_errors(output, shuffled_target(target, order))
             ranking = (
@@ -109,9 +155,7 @@ def train_epoch(model, ema, loader, optimizer, scaler, device, args):
             )
             topology = topology_loss(output, target)
             diversity = diversity_loss(output, target)
-            representation = result.condition.grid16.mean((1, 2))
-            variance, covariance = variance_covariance_regularization(representation)
-            spatial_spread = F.relu(0.35 - result.condition.grid16.std((1, 2)).mean())
+            residual = residual_energy(output, base)
             weights = result.condition.subject_weights.clamp_min(1e-8)
             effective_subjects = (-weights * weights.log()).sum(1).exp()
             subject_collapse = F.relu(3 - effective_subjects).mean() / 3
@@ -119,13 +163,12 @@ def train_epoch(model, ema, loader, optimizer, scaler, device, args):
                 pyramid
                 + 0.55 * task
                 + 0.70 * hard
+                + 1.7 * improve
                 + 0.55 * ranking
                 + 0.45 * topology
                 + 0.60 * diversity
+                + 0.002 * residual
                 + 0.05 * subject_collapse
-                + 0.20 * variance
-                + 0.04 * covariance
-                + 0.10 * spatial_spread
             )
         scaler.scale(loss).backward()
         scaler.unscale_(optimizer)
@@ -139,12 +182,11 @@ def train_epoch(model, ema, loader, optimizer, scaler, device, args):
             "pyramid": pyramid,
             "task": task,
             "hard": hard,
+            "improvement": improve,
             "ranking": ranking,
             "topology": topology,
             "diversity": diversity,
-            "representation_variance": variance,
-            "representation_covariance": covariance,
-            "spatial_spread": spatial_spread,
+            "residual_energy": residual,
             "effective_subjects": effective_subjects.mean(),
             **parts,
             **{f"sample_{key}": value.mean() for key, value in sample_parts.items()},
@@ -156,19 +198,29 @@ def train_epoch(model, ema, loader, optimizer, scaler, device, args):
 
 
 @torch.no_grad()
-def predict(model, loader, device):
+def predict(model, baseline, loader, device):
     model.eval()
     outputs = []
+    baselines = []
     targets = {key: [] for key in PYRAMID_KEYS}
     names = []
     for batch in loader:
         eeg = batch["eeg"].to(device)
         with torch.autocast("cuda", torch.float16, enabled=device.type == "cuda"):
-            output = model(eeg).pyramid
+            base = baseline(eeg)
+            output = model(eeg, base).pyramid
         outputs.append(
             PyramidEdgeOutput(
                 **{
                     field: getattr(output, field).float().cpu()
+                    for field in PyramidEdgeOutput.__dataclass_fields__
+                }
+            )
+        )
+        baselines.append(
+            PyramidEdgeOutput(
+                **{
+                    field: getattr(base, field).float().cpu()
                     for field in PyramidEdgeOutput.__dataclass_fields__
                 }
             )
@@ -178,6 +230,7 @@ def predict(model, loader, device):
         names.extend(batch["filename"])
     return (
         concatenate(outputs),
+        concatenate(baselines),
         {key: torch.cat(value) for key, value in targets.items()},
         names,
     )
@@ -192,15 +245,20 @@ def shuffle_output(output, seed):
     )
 
 
-def evaluate(model, loader, device, seed=None):
-    output, target, _ = predict(model, loader, device)
-    values = pyramid_metrics(output, target)
+def evaluate(model, baseline, loader, device, seed=None):
+    output, base, target, _ = predict(model, baseline, loader, device)
+    values, base_values = pyramid_metrics(output, target), pyramid_metrics(base, target)
     if seed is None:
-        return values
-    return values, pyramid_metrics(shuffle_output(output, seed), target)
+        return values, base_values
+    return (
+        values,
+        base_values,
+        pyramid_metrics(shuffle_output(output, seed), target),
+        pyramid_metrics(shuffle_output(base, seed), target),
+    )
 
 
-def score(value, wrong):
+def score(value, wrong, baseline_value):
     keys = (
         "semantic_tolerant_f1",
         "crisp_tolerant_f1",
@@ -217,7 +275,22 @@ def score(value, wrong):
         + 0.9 * specificity
         + 0.25 * value["orientation_cosine"]
     )
-    return base
+    improvement = (
+        1.0 * (value["semantic_tolerant_f1"] - baseline_value["semantic_tolerant_f1"])
+        + 1.2 * (value["crisp_tolerant_f1"] - baseline_value["crisp_tolerant_f1"])
+        + 0.6 * (value["distance_correlation"] - baseline_value["distance_correlation"])
+    )
+    return base + improvement
+
+
+def strictly_better(value, baseline_value, score_value, baseline_score):
+    return (
+        score_value > baseline_score
+        and value["semantic_tolerant_f1"] > baseline_value["semantic_tolerant_f1"]
+        and value["crisp_tolerant_f1"] > baseline_value["crisp_tolerant_f1"]
+        and value["distance_correlation"] > baseline_value["distance_correlation"]
+        and value["shape_iou"] >= baseline_value["shape_iou"] - 0.002
+    )
 
 
 def gray(value, tile):
@@ -226,20 +299,23 @@ def gray(value, tile):
 
 
 @torch.no_grad()
-def save_panel(model, dataset, device, path, count):
+def save_panel(model, baseline, dataset, device, path, count):
     samples = [dataset[index] for index in range(min(count, len(dataset)))]
     if not samples:
         return
     eeg = torch.stack([sample["eeg"] for sample in samples]).to(device)
+    base = baseline(eeg)
     model.eval()
-    output = model(eeg).pyramid
+    output = model(eeg, base).pyramid
     headers = (
         "semantic GT",
-        "semantic direct",
-        "semantic error x2",
+        "semantic baseline",
+        "semantic specialist",
+        "semantic change x4",
         "crisp GT",
-        "crisp direct",
-        "crisp error x2",
+        "crisp baseline",
+        "crisp specialist",
+        "crisp change x4",
     )
     tile, label = 112, 22
     canvas = Image.new("RGB", (len(headers) * tile, (len(samples) + 1) * (tile + label)), "white")
@@ -249,15 +325,23 @@ def save_panel(model, dataset, device, path, count):
     for row, sample in enumerate(samples):
         y = (row + 1) * (tile + label)
         draw.text((3, y - label + 3), sample["filename"], fill="black")
-        semantic = output.semantic_logits32.sigmoid()[row].cpu()
-        crisp = output.crisp_logits64.sigmoid()[row].cpu()
+        semantic_base, semantic = (
+            base.semantic_logits32.sigmoid()[row].cpu(),
+            output.semantic_logits32.sigmoid()[row].cpu(),
+        )
+        crisp_base, crisp = (
+            base.crisp_logits64.sigmoid()[row].cpu(),
+            output.crisp_logits64.sigmoid()[row].cpu(),
+        )
         values = (
             sample["semantic32"],
+            semantic_base,
             semantic,
-            (semantic - sample["semantic32"]).abs() * 2,
+            (semantic - semantic_base).abs() * 4,
             sample["crisp64"],
+            crisp_base,
             crisp,
-            (crisp - sample["crisp64"]).abs() * 2,
+            (crisp - crisp_base).abs() * 4,
         )
         for column, value in enumerate(values):
             canvas.paste(gray(value, tile), (column * tile, y))
@@ -305,18 +389,10 @@ def main() -> None:
         )
         for key, value in datasets.items()
     }
+    baseline = FrozenEdgeBaseline(
+        Path(args.baseline), args.semantic_encoder, args.pyramid_decoder, device
+    )
     model = EEGEdgeSpecialist().to(device)
-    if args.init_from and not args.resume:
-        warm = torch.load(args.init_from, map_location="cpu", weights_only=False)
-        source = warm.get("ema", warm["model"])
-        current = model.state_dict()
-        matching = {
-            key: value
-            for key, value in source.items()
-            if key.startswith("encoder.") and key in current and current[key].shape == value.shape
-        }
-        model.load_state_dict(matching, strict=False)
-        print(f"warm-started {len(matching)} edge EEG tensors from {args.init_from}", flush=True)
     ema = copy.deepcopy(model).eval()
     for parameter in ema.parameters():
         parameter.requires_grad_(False)
@@ -343,8 +419,11 @@ def main() -> None:
     history = output_dir / "history.jsonl"
     if not args.resume:
         history.unlink(missing_ok=True)
-    initial, shuffled = evaluate(ema, loaders["val"], device, args.seed)
-    initial_score = score(initial, shuffled)
+    initial, baseline_validation, shuffled, baseline_shuffled = evaluate(
+        ema, baseline, loaders["val"], device, args.seed
+    )
+    baseline_score = score(baseline_validation, baseline_shuffled, baseline_validation)
+    initial_score = score(initial, shuffled, baseline_validation)
     if start == 0:
         best = initial_score
         initial_payload = {
@@ -357,28 +436,35 @@ def main() -> None:
             "scaler": scaler.state_dict(),
             "best_score": best,
             "stale": 0,
-            "architecture": "independent_direct_edge_v1",
-            "record": {"validation": initial, "shuffled": shuffled},
+            "baseline_score": baseline_score,
+            "baseline": args.baseline,
+            "pyramid_decoder": args.pyramid_decoder,
+            "record": {"validation": initial, "baseline_validation": baseline_validation},
         }
         torch.save(initial_payload, output_dir / "best.pt")
         print(
-            f"initial={initial_score:.3f} "
+            f"initial={initial_score:.3f} baseline={baseline_score:.3f} "
             f"semantic={initial['semantic_tolerant_f1']:.3f} crisp={initial['crisp_tolerant_f1']:.3f}",
             flush=True,
         )
     for epoch in range(start, args.epochs):
-        train = train_epoch(model, ema, loaders["train"], optimizer, scaler, device, args)
+        train = train_epoch(model, ema, baseline, loaders["train"], optimizer, scaler, device, args)
         # Fixed permutation makes checkpoint comparisons deterministic.
-        validation, shuffled = evaluate(ema, loaders["val"], device, args.seed)
-        current = score(validation, shuffled)
+        validation, baseline_validation, shuffled, _ = evaluate(
+            ema, baseline, loaders["val"], device, args.seed
+        )
+        current = score(validation, shuffled, baseline_validation)
         improved = current > best + 1e-5
+        strict = strictly_better(validation, baseline_validation, current, baseline_score)
         stale = 0 if improved else stale + 1
         scheduler.step(current)
         record = {
             "epoch": epoch,
             "score": current,
+            "strictly_beats_baseline": strict,
             "train": train,
             "validation": validation,
+            "baseline_validation": baseline_validation,
             "shuffled": shuffled,
             "lr": optimizer.param_groups[0]["lr"],
         }
@@ -395,14 +481,26 @@ def main() -> None:
             "best_score": max(best, current),
             "stale": stale,
             "record": record,
-            "architecture": "independent_direct_edge_v1",
+            "baseline_score": baseline_score,
+            "baseline": args.baseline,
+            "pyramid_decoder": args.pyramid_decoder,
         }
         torch.save(payload, output_dir / "last.pt")
         if improved:
             best = current
             torch.save(payload, output_dir / "best.pt")
+        if strict:
+            path = output_dir / "best_beating_baseline.pt"
+            previous = -math.inf
+            if path.exists():
+                previous = torch.load(path, map_location="cpu", weights_only=False).get(
+                    "best_score", previous
+                )
+            if current > previous:
+                torch.save(payload, path)
         save_panel(
             ema,
+            baseline,
             datasets["val"],
             device,
             output_dir / "panels" / f"epoch_{epoch:03d}.png",
@@ -419,16 +517,19 @@ def main() -> None:
     selected = torch.load(output_dir / "best.pt", map_location="cpu", weights_only=False)
     ema.load_state_dict(selected["ema"])
     ema.to(device)
-    test, shuffled = evaluate(ema, loaders["test"], device, args.seed + 999)
+    test, baseline_test, shuffled, _ = evaluate(
+        ema, baseline, loaders["test"], device, args.seed + 999
+    )
     report = {
         "checkpoint_epoch": selected["epoch"],
         "edge_specialist": test,
+        "baseline": baseline_test,
         "shuffled": shuffled,
+        "validation_baseline_score": baseline_score,
         "validation_selected_score": selected["best_score"],
         "test_images": len(datasets["test"]),
         "untouched_full_test": not args.smoke,
         "inference_inputs": ["preprocessed_eeg"],
-        "architecture": "independent_direct_edge_v1",
     }
     (output_dir / "test_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report, indent=2))

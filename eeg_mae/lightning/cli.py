@@ -1,4 +1,4 @@
-"""Shared CLI plumbing for the Lightning train scripts (CLAUDE.md conventions):
+"""Shared CLI plumbing for the Lightning train scripts (shared run conventions):
 ``--run-name`` is REQUIRED with no default; a run directory that already holds
 checkpoints refuses to start without an explicit ``--overwrite``."""
 
@@ -30,7 +30,7 @@ def prepare_run_dir(model_name: str, args: argparse.Namespace) -> Path:
     run_dir = Path("artifacts") / model_name / args.run_name
     checkpoints = run_dir / "checkpoints"
     existing = sorted(checkpoints.glob("*.ckpt")) if checkpoints.exists() else []
-    if existing and not args.overwrite:
+    if existing and not args.overwrite and not getattr(args, "resume", None):
         raise SystemExit(
             f"ODMOWA STARTU: {checkpoints} zawiera checkpointy ({existing[0].name}, ...). "
             "Nadpisanie wylacznie przez jawne --overwrite."

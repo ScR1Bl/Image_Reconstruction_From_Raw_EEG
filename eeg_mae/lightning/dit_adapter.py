@@ -108,7 +108,7 @@ class DiTAdapterLightning(L.LightningModule):
     def __init__(
         self,
         repo: str = "PixArt-alpha/PixArt-XL-2-512x512",
-        null_embeddings_file: str = "artifacts/dit_adapter/t5_embeddings.pt",
+        null_embeddings_file: str = "data/derived/pixart_null.pt",
         null_key: str = "null_learned",
         clip_dim: int = 768,
         image_tokens: int = 8,
@@ -168,6 +168,11 @@ class DiTAdapterLightning(L.LightningModule):
         return {k: v for k, v in full.items() if not k.startswith(("transformer.", "_vae_model."))}
 
     def load_state_dict(self, state_dict, strict: bool = True, assign: bool = False):
+        # Historical preview callbacks accidentally registered frozen VAE weights.
+        # They are independent of the adapter and loaded from the pinned base model.
+        state_dict = {
+            key: value for key, value in state_dict.items() if not key.startswith("_vae_model.")
+        }
         result = super().load_state_dict(state_dict, strict=False, assign=assign)
         missing, unexpected = result.missing_keys, result.unexpected_keys
         real_missing = [k for k in missing if not k.startswith(("transformer.", "_vae_model."))]
